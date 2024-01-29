@@ -1,4 +1,7 @@
-use std::io::{self, stdout};
+use std::{
+    io::{self, stdout},
+    rc::Rc,
+};
 
 use crossterm::{
     event::{self, Event, KeyCode},
@@ -62,10 +65,22 @@ fn ui(frame: &mut Frame) {
         Block::default().borders(Borders::ALL).title(path_left()),
         inner_layout[0],
     );
-    frame.render_widget(
-        Block::default().borders(Borders::ALL).title("Right"),
-        inner_layout[1],
-    );
+
+    render_right_directory(frame, inner_layout);
+}
+
+fn render_right_directory(frame: &mut Frame, inner_layout: Rc<[Rect]>) {
+    let items = ["Item 1", "Item 2", "Item 3"];
+
+    let list = List::new(items)
+        .block(Block::default().title("List").borders(Borders::ALL))
+        .style(Style::default().fg(Color::White))
+        .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
+        .highlight_symbol(">>")
+        .repeat_highlight_symbol(true)
+        .direction(ListDirection::TopToBottom);
+
+    frame.render_widget(list, inner_layout[1]);
 }
 
 fn path_left() -> String {
