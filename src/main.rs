@@ -59,11 +59,15 @@ fn ui(frame: &mut Frame) {
     )
     .split(main_layout[1]);
     frame.render_widget(
-        Block::default().borders(Borders::ALL).title("Left"),
+        Block::default().borders(Borders::ALL).title(path_left()),
         inner_layout[0],
     );
     frame.render_widget(
         Block::default().borders(Borders::ALL).title("Right"),
         inner_layout[1],
     );
+}
+
+fn path_left() -> String {
+    "Leva".to_string()
 }
