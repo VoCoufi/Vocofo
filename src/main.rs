@@ -13,6 +13,9 @@ use ratatui::{prelude::*, widgets::*};
 fn main() -> io::Result<()> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
+    stdout().execute(crossterm::event::EnableMouseCapture)?;
+    stdout().execute(crossterm::event::EnableFocusChange)?;
+
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
 
     let mut should_quit = false;
@@ -23,6 +26,8 @@ fn main() -> io::Result<()> {
 
     disable_raw_mode()?;
     stdout().execute(LeaveAlternateScreen)?;
+    stdout().execute(crossterm::event::DisableMouseCapture)?;
+    stdout().execute(crossterm::event::DisableFocusChange)?;
     Ok(())
 }
 
@@ -78,9 +83,12 @@ fn render_right_directory(frame: &mut Frame, inner_layout: Rc<[Rect]>) {
         .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
         .highlight_symbol(">>")
         .repeat_highlight_symbol(true)
+        .highlight_spacing(HighlightSpacing::WhenSelected)
         .direction(ListDirection::TopToBottom);
 
-    frame.render_widget(list, inner_layout[1]);
+    let mut state = ListState::default().with_selected(Some(0));
+
+    frame.render_stateful_widget(list, inner_layout[1], &mut state);
 }
 
 fn path_left() -> String {
