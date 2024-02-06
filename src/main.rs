@@ -10,6 +10,11 @@ use crossterm::{
 };
 use ratatui::{prelude::*, widgets::*};
 
+mod file_operation;
+
+// TODO do something with this
+static mut STATE_RIGHT: usize = 0;
+
 fn main() -> io::Result<()> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
@@ -34,8 +39,18 @@ fn main() -> io::Result<()> {
 fn handle_events() -> io::Result<bool> {
     if event::poll(std::time::Duration::from_millis(50))? {
         if let Event::Key(key) = event::read()? {
-            if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('q') {
-                return Ok(true);
+            if key.kind == event::KeyEventKind::Press {
+                use KeyCode::*;
+                match key.code {
+                    Char('q') | Esc => return Ok(true),
+                    Down => unsafe {
+                        STATE_RIGHT += 1;
+                    },
+                    Up => unsafe {
+                        STATE_RIGHT -= 1;
+                    },
+                    _ => {}
+                }
             }
         }
     }
@@ -75,7 +90,7 @@ fn ui(frame: &mut Frame) {
 }
 
 fn render_right_directory(frame: &mut Frame, inner_layout: Rc<[Rect]>) {
-    let items = ["Item 1", "Item 2", "Item 3"];
+    let items = file_operation::list_children().unwrap();
 
     let list = List::new(items)
         .block(Block::default().title("List").borders(Borders::ALL))
@@ -86,9 +101,11 @@ fn render_right_directory(frame: &mut Frame, inner_layout: Rc<[Rect]>) {
         .highlight_spacing(HighlightSpacing::WhenSelected)
         .direction(ListDirection::TopToBottom);
 
-    let mut state = ListState::default().with_selected(Some(0));
+    unsafe {
+        let mut state = ListState::default().with_selected(Some(STATE_RIGHT));
 
-    frame.render_stateful_widget(list, inner_layout[1], &mut state);
+        frame.render_stateful_widget(list, inner_layout[1], &mut state);
+    }
 }
 
 fn path_left() -> String {
