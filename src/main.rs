@@ -96,7 +96,6 @@ fn render_right_directory(frame: &mut Frame, inner_layout: Rc<[Rect]>) {
 
     let list = List::new(items)
         .block(Block::default().title("List").borders(Borders::ALL))
-        .style(Style::default().fg(Color::White))
         .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
         .highlight_symbol(">>")
         .repeat_highlight_symbol(true)
