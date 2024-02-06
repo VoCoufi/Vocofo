@@ -72,7 +72,9 @@ fn ui(frame: &mut Frame) {
         main_layout[0],
     );
     frame.render_widget(
-        Block::new().borders(Borders::TOP).title("Status Bar"),
+        Paragraph::new("Q - Quit | C - Copy | P - Paste | R - Rename")
+            .bold()
+            .alignment(Alignment::Left),
         main_layout[2],
     );
 
