@@ -9,8 +9,12 @@ use crate::context::Context;
 
 pub fn list_children(context: &mut Context) -> Result<Vec<ListItem<'static>>> {
     let mut list = Vec::new();
-    let mut folders = Vec::new();
+    let mut folders: Vec<String> = Vec::new();
+    folders.push("../".to_string());
+
     let mut files = Vec::new();
+
+    context.items = Vec::new();
 
     
 
@@ -26,6 +30,8 @@ pub fn list_children(context: &mut Context) -> Result<Vec<ListItem<'static>>> {
     }
 
     folders.sort();
+
+
     files.sort();
 
     for folder in folders {
@@ -53,7 +59,7 @@ pub fn create_dir(path: String) -> Result<()> {
 }
 
 pub fn open_dir(context: &mut Context) {
-    context.path = context.get_selected_item().unwrap();
+    context.set_full_path();
     context.state = 0;
 }
 

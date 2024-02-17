@@ -17,15 +17,34 @@ impl Context {
         }
     }
 
-    pub fn increment_state(mut self) {
+    /// Returns the increment state of this [`Context`].
+    pub fn increment_state(&mut self) {
         self.state += 1;
     }
 
-    pub fn decrease_state(mut self) {
+    pub fn decrease_state(&mut self) {
         self.state -= 1;
     }
 
-    pub fn get_selected_item(self) -> Option<String> {
-        self.items.get(self.state).cloned()
+    pub fn get_selected_item(&self) -> Option<&String> {
+        self.items.get(self.state)
+    }
+
+    pub fn set_full_path(&mut self) {
+        let new_directory = self.path.clone() + "/" + self.get_selected_item().unwrap();
+        self.path = file_operation::directory_path(&new_directory);
+    }
+
+    pub fn open_item(&mut self) {
+        let file = fs::metadata(self.path.clone() + "/" + self.get_selected_item().unwrap()).unwrap();
+
+        if file.is_dir() {
+            self.set_full_path();
+            self.state = 0;
+        } else if file.is_file() {
+            let file_path = self.path.clone() + "/" + self.get_selected_item().unwrap();
+            let _ = edit::edit_file(file_path);
+        }
+
     }
 }

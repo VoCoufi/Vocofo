@@ -39,16 +39,16 @@ fn handle_events(context: &mut Context) -> io::Result<bool> {
         if let Event::Key(key) = event::read()? {
             if key.kind == event::KeyEventKind::Press {
                 use KeyCode::*;
+
                 match key.code {
                     Char('q') | Esc => return Ok(true),
-                    Enter => file_operation::open_file("/home/coufi/Desktop/test.txt"),
+                    Enter => context.open_item(),
                     // Tab will be changed
                     Tab => file_operation::open_dir(context),
                     Down =>
-                        context.increment_state(),
-                        //if context.items.len() != context.state {
-                        //    context.clone().increment_state();
-                        //},
+                        if context.items.len() > context.state + 1 {
+                            Context::increment_state(context);
+                        },
                     Up =>
                         if context.state > 0 {
                             context.decrease_state();

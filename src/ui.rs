@@ -49,7 +49,7 @@ fn render_right_directory(frame: &mut Frame, inner_layout: Rc<[Rect]>, context: 
     let list = List::new(items)
         .block(
             Block::default()
-                .title(file_operation::directory_path("."))
+                .title(context.path.clone())
                 .borders(Borders::ALL),
         )
         .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
