@@ -5,7 +5,8 @@ use crate::file_operation;
 pub struct Context {
     pub path: String,
     pub items: Vec<String>,
-    pub state: usize
+    pub state: usize,
+    pub popup: bool
 }
 
 impl Context {
@@ -14,6 +15,7 @@ impl Context {
             path: file_operation::directory_path("."),
             items: Vec::new(),
             state: 0,
+            popup: false,
         }
     }
 
@@ -30,6 +32,14 @@ impl Context {
         self.items.get(self.state)
     }
 
+    pub fn get_popup(&self) -> Option<bool> {
+        Some(self.popup)
+    }
+
+    pub fn set_popup(&mut self) {
+        self.popup = !self.get_popup().unwrap()
+    }
+
     pub fn set_full_path(&mut self) {
         let new_directory = self.path.clone() + "/" + self.get_selected_item().unwrap();
         self.path = file_operation::directory_path(&new_directory);
@@ -42,8 +52,10 @@ impl Context {
             self.set_full_path();
             self.state = 0;
         } else if file.is_file() {
-            let file_path = self.path.clone() + "/" + self.get_selected_item().unwrap();
-            let _ = edit::edit_file(file_path);
+            file_operation::open_file(&(self.path.clone() + "/" + self.get_selected_item().unwrap()))
+
+            //let file_path = self.path.clone() + "/" + self.get_selected_item().unwrap();
+            //let _ = edit::edit_file(file_path);
         }
 
     }

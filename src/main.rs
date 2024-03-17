@@ -9,6 +9,7 @@ use ratatui::prelude::*;
 mod file_operation;
 mod ui;
 mod context;
+mod render;
 
 use crate::context::Context;
 
@@ -53,6 +54,7 @@ fn handle_events(context: &mut Context) -> io::Result<bool> {
                         if context.state > 0 {
                             context.decrease_state();
                         },
+                    Char('p') => context.set_popup(),
                     _ => {}
                 }
             }
