@@ -44,21 +44,9 @@ pub fn ui(frame: &mut Frame, context: &mut Context) {
     );
 
     render::render_left_directory(frame, inner_layout.clone(), context);
+    render::render_right_directory(frame, inner_layout.clone(), context);
 
     if context.get_popup().unwrap() {
-        let block = Block::default().title("Create folder").borders(Borders::ALL);
-        let area = centered_rect(frame.size());
-        frame.render_widget(Clear, area); //this clears out the background
-        frame.render_widget(block, area);
+        render::popup_window(frame, context);
     }
-
-    //render_right_directory(frame, inner_layout, context);
-}
-
-/// helper function to create a centered rect using up certain percentage of the available rect `r`
-fn centered_rect(r: Rect) -> Rect {
-    Layout::new(
-        Direction::Vertical, 
-        [Constraint::Length(3), Constraint::Length(5)])
-        .split(r)[0]
 }

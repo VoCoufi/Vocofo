@@ -72,9 +72,9 @@ pub fn open_file(path: &str) {
 }
 
 pub fn directory_path(folder_path: &str) -> String {
-    return String::from_str(fs::canonicalize(folder_path).ok().unwrap().to_str().unwrap())
+    String::from_str(fs::canonicalize(folder_path).ok().unwrap().to_str().unwrap())
         .ok()
-        .unwrap();
+        .unwrap()
 }
 
 fn get_type_from_metadata(metadata: fs::Metadata) {

@@ -6,7 +6,8 @@ pub struct Context {
     pub path: String,
     pub items: Vec<String>,
     pub state: usize,
-    pub popup: bool
+    pub popup: bool,
+    pub input: String,
 }
 
 impl Context {
@@ -16,6 +17,7 @@ impl Context {
             items: Vec::new(),
             state: 0,
             popup: false,
+            input: String::default(),
         }
     }
 
@@ -38,6 +40,14 @@ impl Context {
 
     pub fn set_popup(&mut self) {
         self.popup = !self.get_popup().unwrap()
+    }
+    
+    pub fn get_input(&self) -> Option<&String> {
+        Some(&self.input)
+    }
+    
+    pub fn set_input(&mut self, input: String) {
+        self.input = input;
     }
 
     pub fn set_full_path(&mut self) {
