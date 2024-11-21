@@ -1,8 +1,7 @@
-use std::{rc::Rc, str::FromStr};
 use ratatui::{prelude::*, widgets::*};
 
-use crate::file_operation;
 use crate::context::Context;
+use crate::render;
 
 pub fn ui(frame: &mut Frame, context: &mut Context) {
     let main_layout = Layout::new(
@@ -22,7 +21,7 @@ pub fn ui(frame: &mut Frame, context: &mut Context) {
         main_layout[0],
     );
     frame.render_widget(
-        Paragraph::new("Q - Quit | C - Copy | P - Paste | R - Rename | Enter - Open")
+        Paragraph::new("Q - Quit | C - Copy | P - Paste | R - Rename | Enter - Open | O - Options")
             .bold()
             .alignment(Alignment::Left),
         main_layout[2],
@@ -33,41 +32,21 @@ pub fn ui(frame: &mut Frame, context: &mut Context) {
         [Constraint::Percentage(50), Constraint::Percentage(50)],
     )
     .split(main_layout[1]);
+
+    let binding = String::default();
+    let filename_right = context.get_selected_item().unwrap_or(&binding);
+
     frame.render_widget(
         Block::default()
             .borders(Borders::ALL)
-            .title(path_left()),
-        inner_layout[0],
+            .title(filename_right.clone()),
+        inner_layout[1],
     );
 
-    render_right_directory(frame, inner_layout, context);
-}
+    render::render_left_directory(frame, inner_layout.clone(), context);
+    render::render_right_directory(frame, inner_layout.clone(), context);
 
-fn render_right_directory(frame: &mut Frame, inner_layout: Rc<[Rect]>, context: &mut Context) {
-    let items = file_operation::list_children(context).unwrap();
-
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .title(context.path.clone())
-                .borders(Borders::ALL),
-        )
-        .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
-        .highlight_symbol(">>")
-        .repeat_highlight_symbol(true)
-        .highlight_spacing(HighlightSpacing::WhenSelected)
-        .direction(ListDirection::TopToBottom);
-
-    let mut state = ListState::default().with_selected(Some(context.state));
-
-    frame.render_stateful_widget(list, inner_layout[1], &mut state);
-}
-
-fn path_left() -> String {
-    file_operation::directory_path("./")
-}
-
-pub fn selected_item_right(context: &mut Context) -> String {
-    let item = String::from_str(context.items.get(context.state).unwrap());
-    item.ok().unwrap()
+    if context.get_popup().unwrap() {
+        render::popup_window(frame, context);
+    }
 }

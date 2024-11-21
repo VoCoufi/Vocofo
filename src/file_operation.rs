@@ -1,4 +1,6 @@
-use std::{borrow::BorrowMut, fs, io::Result, str::FromStr};
+use std::fs;
+use std::process::Command;
+use std::{io::Result, str::FromStr};
 
 use ratatui::{
     style::{Style, Stylize},
@@ -21,8 +23,10 @@ pub fn list_children(context: &mut Context) -> Result<Vec<ListItem<'static>>> {
     for child in fs::read_dir(&context.path)? {
         let child = child?;
         let name: String = child.file_name().into_string().unwrap();
-
-        if child.file_type()?.is_dir() {
+        let metadata = child.metadata()?;
+        
+        /// TODO resolve symlink
+        if metadata.is_dir() {
             folders.push(name + "/");
         } else {
             files.push(name);
@@ -68,7 +72,11 @@ pub fn open_file(path: &str) {
 }
 
 pub fn directory_path(folder_path: &str) -> String {
-    return String::from_str(fs::canonicalize(folder_path).ok().unwrap().to_str().unwrap())
+    String::from_str(fs::canonicalize(folder_path).ok().unwrap().to_str().unwrap())
         .ok()
-        .unwrap();
+        .unwrap()
+}
+
+fn get_type_from_metadata(metadata: fs::Metadata) {
+    
 }
