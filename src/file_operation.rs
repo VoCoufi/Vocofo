@@ -85,7 +85,7 @@ pub fn delete(path: impl AsRef<Path>) -> Result<()> {
 
 /// Creates a new directory at the specified path
 pub fn create_dir(path: impl AsRef<Path>) -> Result<()> {
-    fs::create_dir(path)
+    fs::create_dir_all(path)
 }
 
 /// Updates the context to navigate into the selected directory

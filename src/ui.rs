@@ -15,7 +15,7 @@ type UiResult<T> = Result<T, Box<dyn std::error::Error>>;
 /// Main UI rendering function
 pub fn ui(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
     // Create the main application layout
-    let main_layout = create_main_layout(frame.size());
+    let main_layout = create_main_layout(frame.area());
 
     // Render the application components
     render_title_bar(frame, &main_layout[0]);
@@ -136,7 +136,7 @@ fn render_preview_panel(frame: &mut Frame, area: &Rect, context: &mut Context) -
 fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
     // Check if the creation folder popup should be displayed
     if context.get_popup().expect("REASON") {
-        render::popup_window(frame, context)?;
+        render::popup_name_creation(frame, context)?;
     }
 
     // Check if the confirmation popup should be displayed

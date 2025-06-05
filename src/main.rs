@@ -17,7 +17,7 @@ mod event_handler;
 use crate::context::Context;
 
 // Application error type for better error handling
-type AppResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+type AppResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 fn main() -> AppResult<()> {
     // Setup terminal

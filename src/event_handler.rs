@@ -1,7 +1,6 @@
 use crate::context::Context;
 use crate::file_operation;
 use crossterm::event::{KeyCode, KeyEvent};
-use std::path::PathBuf;
 
 /// Result type for event handler operations
 type EventResult = Result<(), Box<dyn std::error::Error>>;
@@ -32,10 +31,10 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
             context.set_popup();
         }
         KeyCode::Char('c') => {
-            context.set_confirm_popup();
+            // TODO copy function
         }
         KeyCode::Char('d') => {
-            file_operation::handle_delete_operation(context)?;
+            context.set_confirm_popup();
         }
         _ => {}
     }
@@ -91,7 +90,7 @@ pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) ->
             context.set_confirm_popup();
             
             if context.get_confirm_button_selected().unwrap() {
-                // Delete file
+                // Delete a file
                 file_operation::handle_delete_operation(context)?;
                 context.set_confirm_button_selected()
             }
