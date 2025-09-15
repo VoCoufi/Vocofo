@@ -2,24 +2,48 @@ use crate::file_operation;
 use std::fs;
 use std::fs::Metadata;
 
+/// A structure that holds the context and state information for a specific application or system.
+/// It encapsulates various configurations, user inputs, and state-related flags.
+///
+/// # Fields
+///
+/// * `exit` - A boolean flag that indicates whether the application should exit or not.
+/// * `path` - A `String` representing the current path or directory being used in the application.
+/// * `items` - A `Vec<String>` storing a collection of items, which could represent entries, options, or other data.
+/// * `state` - A `usize` representing the current state or index in the application, often used for navigation or tracking.
+/// * `popup` - A boolean flag that determines whether a popup should be displayed or not.
+/// * `confirm_popup` - A boolean flag to indicate if a confirmation popup is active or required.
+/// * `confirm_popup_size` - A boolean flag that determines whether the size of the confirmation popup needs to be adjusted or checked.
+/// * `input` - A `String` representing the user's input or a field for capturing user-typed text.
 pub struct Context {
     pub exit: bool,
     pub path: String,
     pub items: Vec<String>,
     pub state: usize,
+    pub ui_state: UiState,
     pub popup: bool,
     pub confirm_popup: bool,
     pub confirm_popup_size: bool,
     pub input: String,
 }
 
+/// Represents different UI states
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum UiState {
+    Normal,
+    CreatePopup,
+    ConfirmDelete,
+}
+
+
 impl Context {
-    pub fn new() -> Context {
-        Context {
+    pub fn new() -> Self {
+        Self {
             exit: false,
             path: file_operation::directory_path(".").expect("REASON"),
             items: Vec::new(),
             state: 0,
+            ui_state: UiState::Normal,
             popup: false,
             confirm_popup: false,
             confirm_popup_size: false,
@@ -58,6 +82,14 @@ impl Context {
     
     pub fn get_confirm_popup(&self) -> Option<bool> {
         Some(self.confirm_popup)
+    }
+    
+    pub fn set_ui_state(&mut self, ui_state: UiState) {
+        self.ui_state = ui_state;
+    }
+    
+    pub fn get_ui_state(&self) -> Option<UiState> {
+        Some(self.ui_state)
     }
     
     pub fn set_confirm_popup(&mut self) {
