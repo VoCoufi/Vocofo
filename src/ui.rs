@@ -6,8 +6,9 @@ use ratatui::{
     style::{Color, Modifier, Style},
 };
 
-use crate::context::Context;
-use crate::render;
+use crate::context::{Context, UiState};
+use crate::messages_enum::MessageEnum;
+use crate::{context, render};
 
 /// Result type for UI operations
 type UiResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -15,7 +16,7 @@ type UiResult<T> = Result<T, Box<dyn std::error::Error>>;
 /// Main UI rendering function
 pub fn ui(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
     // Create the main application layout
-    let main_layout = create_main_layout(frame.size());
+    let main_layout = create_main_layout(frame.area());
 
     // Render the application components
     render_title_bar(frame, &main_layout[0]);
@@ -60,7 +61,7 @@ fn create_browser_layout(area: &Rect) -> Rc<[Rect]> {
 fn render_title_bar(frame: &mut Frame, area: &Rect) {
     let title_block = Block::default()
         .borders(Borders::NONE)
-        .title("Vocofo File Manager")
+        .title(MessageEnum::AppTitle.as_str())
         .title_alignment(Alignment::Center)
         .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
 
@@ -132,17 +133,43 @@ fn render_preview_panel(frame: &mut Frame, area: &Rect, context: &mut Context) -
     Ok(())
 }
 
-/// Renders active popups if any are visible
+/// Renders the appropriate popup UI based on the current UI state.
+///
+/// # Parameters
+/// - `frame`: A mutable reference to the current rendering [`Frame`].
+/// - `context`: A mutable reference to the [`Context`] that contains the application state and information about the UI.
+///
+/// # Returns
+/// Returns [`UiResult<()>`], which:
+/// - Is `Ok(())` if the operation completes successfully.
+/// - Contains an error if the UI state cannot be retrieved or if rendering a popup fails.
+///
+/// # Behavior
+/// The function checks the current UI state from the provided `context`:
+/// - If the state is [`UiState::ConfirmDelete`], it renders the delete confirmation popup by calling [`render::popup_confirm_delete`].
+/// - If the state is [`UiState::CreatePopup`], it renders the name creation popup by calling [`render::popup_name_creation`].
+/// - If the state is [`UiState::Normal`], no popup is rendered.
+///
+/// # Errors
+/// - Returns an error if the UI state is unavailable (`"UI state not available"`).
+/// - Propagates errors that might occur while rendering specific popups (`popup_confirm_delete` or `popup_name_creation`).
+///
+/// # Examples
+/// ```rust
+/// let mut frame = Frame::new();
+/// let mut context = Context::new();
+///
+/// // Assuming the UI state is set to UiState::ConfirmDelete
+/// context.set_ui_state(UiState::ConfirmDelete);
+///
+/// render_popups(&mut frame, &mut context)?;
+/// ```
 fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
-    // Check if the creation folder popup should be displayed
-    if context.get_popup().expect("REASON") {
-        render::popup_window(frame, context)?;
+    match context.get_ui_state().ok_or("UI state not available")? {
+        UiState::ConfirmDelete => render::popup_confirm_delete(frame, context)?,
+        UiState::CreatePopup => render::popup_name_creation(frame, context)?,
+        UiState::Normal => ()
     }
-
-    // Check if the confirmation popup should be displayed
-    if context.get_confirm_popup().expect("REASON") {
-        render::popup_confirm_delete(frame, context)?;
-    }
-
+    
     Ok(())
 }

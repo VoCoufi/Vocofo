@@ -6,13 +6,76 @@ use ratatui::{
     widgets::ListItem,
 };
 
-use crate::context::Context;
+use crate::context::{Context, UiState};
+use crate::context::UiState::Normal;
 
 /// Result type for file operations that can return any error type
 pub type FileResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-/// Lists all files and directories in the current context path
-/// Returns a vector of styled ListItems for display
+/// Generates a list of directory entries (folders and files) for display.
+///
+/// This function takes a mutable reference to the application context,
+/// reads the directory specified in `context.path`, and populates both
+/// `context.items` and a list of styled `ListItem` objects for rendering. 
+/// The directory entries are categorized into folders and files, sorted
+/// alphabetically, and styled differently for display:
+///
+/// - Folders are styled in blue and listed before files.
+/// - Files are styled in green and listed after folders.
+///
+/// ### Parameters:
+///
+/// - `context`: A mutable reference to the `Context` object containing the
+///    application state, including the current path to be listed and the `items`
+///    list to be updated.
+///
+/// ### Returns:
+///
+/// On success, returns a `Result` containing a `Vec<ListItem<'static>>`, where:
+/// - Each `ListItem` represents a directory entry styled appropriately for its type.
+/// - Folders are listed with a trailing slash (e.g., `folder/`).
+///
+/// On failure, returns an `io::Error` wrapped in a `Result::Err`.
+///
+/// ### Behavior:
+///
+/// - Clears the current `context.items`.
+/// - Reads and processes the directory entries in `context.path`.
+/// - Adds `../` at the top of the folders list for navigation to the parent directory.
+/// - Ensures valid UTF-8 conversion for file names.
+/// - Sorts folders and files alphabetically.
+/// - Adds styled folder and file entries to the `ListItem` output and the `context.items`.
+///
+/// ### Errors:
+///
+/// This function can return an error in the following situations:
+/// - If the provided path in `context.path` is invalid or inaccessible.
+/// - If the filenames in the directory contain invalid UTF-8 bytes.
+/// - If an `io::Error` occurs while reading the directory or retrieving metadata.
+///
+/// ### Examples:
+///
+/// ```rust
+/// let mut context = Context::new("/some/directory");
+/// match list_children(&mut context) {
+///     Ok(list) => {
+///         for item in list {
+///             println!("{}", item.content());
+///         }
+///     },
+///     Err(err) => eprintln!("Error listing directory contents: {}", err),
+/// }
+/// ```
+///
+/// This will print the styled directory contents to the console with folders listed
+/// in blue and files in green.
+///
+/// ### Dependencies:
+///
+/// This function relies on the following modules being in scope:
+/// - `std::fs::read_dir` for reading directory entries.
+/// - `std::io::Error` for handling I/O-related errors.
+/// - Types such as `Style` and `ListItem` for styling and rendering directory entries.
 pub fn list_children(context: &mut Context) -> Result<Vec<ListItem<'static>>> {
     let mut list = Vec::new();
     let mut folders = vec!["../".to_string()];
@@ -60,8 +123,29 @@ pub fn list_children(context: &mut Context) -> Result<Vec<ListItem<'static>>> {
     Ok(list)
 }
 
-/// Deletes a file or directory at the specified path
-/// Returns an error if trying to delete parent directory
+/// Deletes a file or directory at the specified path.
+///
+/// # Parameters
+/// - `path`: A path-like object (any type that implements `AsRef<Path>`) representing the file or directory to delete.
+///
+/// # Behavior
+/// - If the path points to a file, the file is deleted.
+/// - If the path points to a directory, the directory and all of its contents (including subdirectories) are deleted recursively.
+/// - To prevent unintentional unsafe behavior, paths containing `"../"` (referring to parent directories) are disallowed. 
+///   Attempting to delete such paths will result in an error.
+///
+/// # Return
+/// - Returns `Ok(())` if the deletion is successful.
+/// - Returns an `Err(io::Error)` if an error occurs during the process, such as if the path does not exist or 
+///   the program lacks sufficient permissions to delete the file or directory.
+///
+/// # Errors
+/// - Returns `io::ErrorKind::InvalidInput` if the provided path contains `"../"`, indicating an attempt to delete a parent directory.
+/// - Returns any other relevant `io::Error` that might occur during file or directory removal operations, such as
+///   `io::ErrorKind::NotFound`, `io::ErrorKind::PermissionDenied`, etc.
+/// # Safety Notes
+/// - This function ensures basic safety checks by prohibiting paths containing `"../"` to prevent accidental deletion
+///   of unintended directories. Be cautious when specifying paths to avoid unintentional data loss.
 pub fn delete(path: impl AsRef<Path>) -> Result<()> {
     let path_str = path.as_ref().to_string_lossy();
 
@@ -83,12 +167,40 @@ pub fn delete(path: impl AsRef<Path>) -> Result<()> {
     }
 }
 
-/// Creates a new directory at the specified path
+/// Creates a directory and all its parent components if they are missing.
+///
+/// This function ensures that the entire directory path specified by `path` exists,
+/// creating intermediate directories as needed. If the directory already exists,
+/// it does nothing and returns `Ok(())`.
+///
+/// # Arguments
+///
+/// * `path` - A path that implements the `AsRef<Path>` trait. This specifies the directory
+///            path to be created.
+///
+/// # Returns
+///
+/// This function returns a `Result`:
+/// * `Ok(())` - If the directory (and any necessary intermediate directories) is successfully created
+///              or already exists.
+/// * `Err(std::io::Error)` - If there is an I/O error while attempting to create the directory
+///                            (e.g., insufficient permissions, invalid path).
+///
 pub fn create_dir(path: impl AsRef<Path>) -> Result<()> {
-    fs::create_dir(path)
+    fs::create_dir_all(path)
 }
 
-/// Updates the context to navigate into the selected directory
+/// Opens a directory and updates the context accordingly.
+///
+/// # Arguments
+/// * `context` - A mutable reference to a `Context` structure that will be updated by this function.
+///
+/// The function performs the following operations:
+/// 1. Calls the `set_full_path` method on the provided `Context` to establish the full path.
+/// 2. Resets the `state` field of the `Context` to `0`.
+///
+/// # Returns
+/// * `FileResult<()>` - Returns `Ok(())` on successful execution, indicating the operation was completed successfully. Any potential errors will be encapsulated in the `FileResult` type.
 pub fn open_dir(context: &mut Context) -> FileResult<()> {
     context.set_full_path();
     context.state = 0;
@@ -126,7 +238,7 @@ pub fn handle_delete_operation(context: &mut Context) -> FileResult<()> {
 
     delete(&path)?;
 
-    // Update selection state if necessary
+    // Update the selection state if necessary
     if context.state > 0 {
         context.decrease_state();
     }
@@ -144,7 +256,7 @@ pub fn handle_create_directory(context: &mut Context) -> FileResult<()> {
     let path = PathBuf::from(&context.path).join(input);
 
     // Close the popup first
-    context.set_popup();
+    context.set_ui_state(Normal);
 
     // Create the directory
     create_dir(&path)?;
@@ -154,4 +266,9 @@ pub fn handle_create_directory(context: &mut Context) -> FileResult<()> {
     context.state = 0;
 
     Ok(())
+}
+
+pub fn copy_file(path_from: impl AsRef<Path>, path_to: impl AsRef<Path>) -> FileResult<()> {
+    
+    unimplemented!()
 }
