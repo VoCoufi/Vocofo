@@ -1,13 +1,13 @@
-use std::{fs, io};
-use std::io::Result;
-use std::path::{Path, PathBuf};
 use ratatui::{
     style::{Style, Stylize},
     widgets::ListItem,
 };
+use std::io::{Error, Result};
+use std::path::{Path, PathBuf};
+use std::{fs, io};
 
-use crate::context::{Context, UiState};
 use crate::context::UiState::Normal;
+use crate::context::Context;
 
 /// Result type for file operations that can return any error type
 pub type FileResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -268,7 +268,140 @@ pub fn handle_create_directory(context: &mut Context) -> FileResult<()> {
     Ok(())
 }
 
-pub fn copy_file(path_from: impl AsRef<Path>, path_to: impl AsRef<Path>) -> FileResult<()> {
-    
-    unimplemented!()
+/// Recursively copy a directory (contents) from `src` to `dst`.
+/// - Creates `dst` if it doesn't exist.
+/// - Skips `.` and `..`.
+/// - Fails if `src` is not a directory.
+/// NOTE: Does not preserve all metadata; extend if needed.
+pub fn copy_dir(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> FileResult<()> {
+    let src = src.as_ref();
+    let dst = dst.as_ref();
+
+    if !src.is_dir() {
+        return Err(Box::new(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Source is not a directory",
+        )));
+    }
+
+    // Prevent copying a directory into itself or its subdirectory
+    let src_canon = fs::canonicalize(src)?;
+    let dst_canon_parent = match dst.parent() {
+        Some(p) => fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()),
+        None => dst.to_path_buf(),
+    };
+    if dst_canon_parent.starts_with(&src_canon) && dst.file_name() == src.file_name() {
+        return Err(Box::new(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Destination is within the source directory",
+        )));
+    }
+
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+
+        if file_type.is_dir() {
+            copy_dir(&from, &to)?;
+        } else if file_type.is_file() {
+            // ensure a parent exists (it should but be safe)
+            if let Some(parent) = to.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(&from, &to)?;
+        } else if file_type.is_symlink() {
+            // Choose a policy: here we dereference and copy the target contents if file,
+            // and recursively copy if directory symlink.
+
+            //VOCO: maybe we should just copy the symlink?
+            
+            let target = fs::read_link(&from)?;
+            let resolved = if target.is_absolute() {
+                target
+            } else {
+                from.parent().unwrap_or(Path::new("")).join(target)
+            };
+            if resolved.is_dir() {
+                copy_dir(&resolved, &to)?;
+            } else {
+                if let Some(parent) = to.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::copy(&resolved, &to)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Copy a file or directory:
+/// - If `path_from` is a file, copies the file to `path_to` (creating parents).
+/// - If `path_from` is a directory, performs a recursive copy to `path_to` (creating it).
+pub fn copy_file(context: &mut Context) -> FileResult<()> {
+    let from = PathBuf::from(&context.get_copy_path());
+    let dest_dir = resolve_path_from(context)?;
+    let item_name = from.file_name().ok_or_else(|| Error::new(io::ErrorKind::InvalidData, "Invalid source path"))?;
+    let to = dest_dir.join(item_name);
+
+    if from == to {
+        return Err(Box::new(Error::new(
+            io::ErrorKind::InvalidInput,
+            "Source and destination are the same",
+        )));
+    }
+
+    let meta = fs::metadata(&from)?;
+    if meta.is_dir() {
+        let to = dest_dir.join(item_name);
+        copy_dir(from, to)?;
+        return Ok(());
+    }
+
+    let to = dest_dir.join(item_name);
+
+    if let Some(parent) = to.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Optional: prevent overwriting; adjust policy as needed.
+    if to.exists() {
+        return Err(Box::new(Error::new(
+            io::ErrorKind::AlreadyExists,
+            "Destination already exists",
+        )));
+    }
+
+    fs::copy(from, to)?;
+    Ok(())
+}
+
+fn resolve_path_from(context: &mut Context) -> FileResult<PathBuf> {
+    let selected_item = context.get_selected_item()
+        .ok_or_else(|| Box::<dyn std::error::Error>::from(
+            "No item selected"
+        ))?;
+    let base_path = PathBuf::from(context.path.clone());
+
+    if context.get_state() != 0 {
+        let selected_item_metadata = fs::metadata(base_path.join(selected_item))
+            .map_err(
+                |e| {
+                    Box::new(
+                        Error::new(e.kind(), format!("Cannot access destination: {}", e)))
+                }
+                    as Box<dyn std::error::Error>)?;
+
+        if selected_item_metadata.is_dir() {
+            return Ok(base_path.join(selected_item.trim_end_matches('/')));
+        }
+    }
+
+    Ok(base_path)
 }

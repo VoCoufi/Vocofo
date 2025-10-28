@@ -1,6 +1,6 @@
 use crate::context::{Context, UiState};
 use crate::file_operation;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// Result type for event handler operations
 type EventResult = Result<(), Box<dyn std::error::Error>>;
@@ -33,33 +33,40 @@ type EventResult = Result<(), Box<dyn std::error::Error>>;
 ///
 /// This function serves as the main entry point for handling user input within the context of the application workflow. It relies on the state and functionality provided by the `Context` object, as well as external file operation utilities where applicable.
 pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
-    match key_event.code {
-        KeyCode::Char('q') | KeyCode::Esc => {
+    match (key_event.code, key_event.modifiers) {
+        (KeyCode::Char('q'), _) | (KeyCode::Esc, _) => {
             context.set_exit();
         }
-        KeyCode::Enter => {
+        (KeyCode::Enter, _) => {
             context.open_item();
         }
-        KeyCode::Tab => {
-            file_operation::open_dir(context);
+        (KeyCode::Tab, _) => {
+            file_operation::open_dir(context)?;
         }
-        KeyCode::Down => {
+        (KeyCode::Down, _) => {
             if context.items.len() > context.state + 1 {
                 context.increment_state();
             }
         }
-        KeyCode::Up => {
+        (KeyCode::Up, _) => {
             if context.state > 0 {
                 context.decrease_state();
             }
         }
-        KeyCode::Char('p') => {
+        (KeyCode::Char('p'), _) => {
             context.set_ui_state(UiState::CreatePopup);
         }
-        KeyCode::Char('c') => {
-            // TODO copy function
+        (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+            // TODO: context.set_status_message("✓ Copied to clipboard");
+            context.set_copy_path();
         }
-        KeyCode::Char('d') => {
+        (KeyCode::Char('v'), KeyModifiers::CONTROL) => {
+            if context.get_copy_path().is_empty() {
+                return Ok(()); // TODO - Handle error
+            }
+            file_operation::copy_file(context)?;
+        }
+        (KeyCode::Char('d'), _) => {
             context.set_ui_state(UiState::ConfirmDelete);
         }
         _ => {}

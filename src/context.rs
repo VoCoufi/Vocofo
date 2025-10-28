@@ -1,6 +1,7 @@
 use crate::file_operation;
 use std::fs;
 use std::fs::Metadata;
+use std::path::PathBuf;
 
 /// A structure that holds the context and state information for a specific application or system.
 /// It encapsulates various configurations, user inputs, and state-related flags.
@@ -25,6 +26,7 @@ pub struct Context {
     pub confirm_popup: bool,
     pub confirm_popup_size: bool,
     pub input: String,
+    pub copy_path: String,
 }
 
 /// Represents different UI states
@@ -37,10 +39,10 @@ pub enum UiState {
 
 
 impl Context {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self {
             exit: false,
-            path: file_operation::directory_path(".").expect("REASON"),
+            path: file_operation::directory_path(".")?,
             items: Vec::new(),
             state: 0,
             ui_state: UiState::Normal,
@@ -48,7 +50,8 @@ impl Context {
             confirm_popup: false,
             confirm_popup_size: false,
             input: String::default(),
-        }
+            copy_path: String::default(),
+        })
     }
     
     pub fn get_exit(&self) -> Option<bool> {
@@ -77,7 +80,12 @@ impl Context {
     }
 
     pub fn set_popup(&mut self) {
-        self.popup = !self.get_popup().unwrap()
+        let item = match self.get_popup() {
+            Some(item) => item,
+            None => return,
+        };
+
+        self.popup = !item
     }
     
     pub fn get_confirm_popup(&self) -> Option<bool> {
@@ -93,7 +101,12 @@ impl Context {
     }
     
     pub fn set_confirm_popup(&mut self) {
-        self.confirm_popup = !self.get_confirm_popup().unwrap()
+        let item = match self.get_confirm_popup() {
+            Some(item) => item,
+            None => return,
+        };
+
+        self.confirm_popup = !item
     }
 
     pub fn get_confirm_button_selected(&self) -> Option<bool> {
@@ -103,7 +116,12 @@ impl Context {
     }
     
     pub fn set_confirm_button_selected(&mut self) {
-        self.confirm_popup_size = !self.get_confirm_button_selected().unwrap()
+        let get_item = match self.get_confirm_button_selected() {
+            Some(item) => item,
+            None => return,
+        };
+
+        self.confirm_popup_size = !get_item
     }
     
     pub fn get_input(&self) -> Option<&String> {
@@ -115,18 +133,47 @@ impl Context {
     }
 
     pub fn set_full_path(&mut self) {
-        let new_directory = self.path.clone() + "/" + self.get_selected_item().unwrap();
-        self.path = file_operation::directory_path(&new_directory).expect("REASON");
+        let get_item = match self.get_selected_item() {
+            Some(item) => item,
+            None => return,
+        };
+
+        let new_directory = PathBuf::from(self.path.clone()).join(get_item);
+        let dir_path = match file_operation::directory_path(&new_directory) {
+            Ok(path) => path,
+            Err(err) => {
+                //TODO error handling
+                return;
+            }
+        };
+
+
+        self.path = dir_path;
     }
 
     pub fn open_item(&mut self) {
-        let file = self.get_metadata_selected_item().unwrap();
+        let file = match self.get_metadata_selected_item() {
+            Some(file) => file,
+            None => return,
+        };
 
         if file.is_dir() {
             self.set_full_path();
             self.state = 0;
         } else if file.is_file() {
-            file_operation::open_file(&(self.path.clone() + "/" + self.get_selected_item().unwrap())).expect("TODO: panic message");
+            let selected_item = match self.get_selected_item() {
+                Some(item) => item,
+                None => return,
+            };
+
+            let file_to_open = PathBuf::from(self.path.clone()).join(selected_item);
+
+            match file_operation::open_file(&file_to_open) {
+                Ok(_) => (),
+                Err(err) => {
+                    //TODO error handling
+                }
+            }
 
             //let file_path = self.path.clone() + "/" + self.get_selected_item().unwrap();
             //let _ = edit::edit_file(file_path);
@@ -134,8 +181,34 @@ impl Context {
     }
     
     pub fn get_metadata_selected_item(&self) -> Option<Metadata> {
-        let file = fs::metadata(self.path.clone() + "/" + self.get_selected_item().unwrap());
-        
-        Some(file.unwrap())
+        let path = PathBuf::from(self.path.clone()).join(self.get_selected_item()?);
+        let file = fs::metadata(path);
+
+        file.ok()
+    }
+
+    pub fn get_copy_path(&self) -> &String {
+        &self.copy_path
+    }
+
+    pub fn set_copy_path(&mut self) {
+        let item = match self.get_selected_item() {
+            Some(item) => item,
+            None => return,
+        };
+
+
+        if item == "../" {
+            return;
+        }
+
+        // Remove the trailing slash if it exists
+        let clean_item = item.trim_end_matches("/");
+        let path = PathBuf::from(&self.path);
+        self.copy_path = path.join(clean_item).to_string_lossy().to_string();
+    }
+    
+    pub fn get_state(&self) -> usize {
+        self.state
     }
 }
