@@ -1,14 +1,14 @@
-use std::rc::Rc;
 use ratatui::{
+    layout::{Alignment, Constraint, Direction, Layout},
     prelude::*,
-    widgets::*,
-    layout::{Constraint, Direction, Layout, Alignment},
     style::{Color, Modifier, Style},
+    widgets::*,
 };
+use std::rc::Rc;
 
 use crate::context::{Context, UiState};
 use crate::messages_enum::MessageEnum;
-use crate::{context, render};
+use crate::render;
 
 /// Result type for UI operations
 type UiResult<T> = Result<T, Box<dyn std::error::Error>>;

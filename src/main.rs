@@ -25,7 +25,7 @@ fn main() -> AppResult<()> {
     let mut terminal = setup_terminal()?;
 
     // Create an application state
-    let mut context = Context::new();
+    let mut context = Context::new()?;
 
     // Run the main application loop
     let result = run_app(&mut terminal, &mut context);
@@ -156,7 +156,7 @@ fn handle_events(context: &mut Context, timeout: Duration) -> AppResult<bool> {
             // Only process press events
             if key.kind == KeyEventKind::Press {
                 // Determine which event handler to use based on the application state
-                match (context.ui_state) {
+                match context.ui_state {
                     context::UiState::Normal => event_handler::handle_main_event(context, key),
                     context::UiState::CreatePopup => event_handler::handle_popup_event(context, key),
                     context::UiState::ConfirmDelete => event_handler::handle_confirm_popup_event(context, key),
