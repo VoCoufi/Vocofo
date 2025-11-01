@@ -68,7 +68,9 @@ impl Context {
     }
 
     pub fn decrease_state(&mut self) {
-        self.state -= 1;
+        if self.state > 0 {
+            self.state -= 1;
+        }
     }
 
     pub fn get_selected_item(&self) -> Option<&String> {

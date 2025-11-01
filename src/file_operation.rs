@@ -352,8 +352,8 @@ pub fn copy_file(context: &mut Context) -> FileResult<()> {
 
     if from == to {
         return Err(Box::new(Error::new(
-            io::ErrorKind::InvalidInput,
-            "Source and destination are the same",
+            io::ErrorKind::AlreadyExists,
+            "Destination already exists",
         )));
     }
 
