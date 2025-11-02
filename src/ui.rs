@@ -114,8 +114,23 @@ fn render_directory_panels(frame: &mut Frame, layout: &[Rect], context: &mut Con
 
 /// Renders a preview panel for the selected item
 fn render_preview_panel(frame: &mut Frame, area: &Rect, context: &mut Context) -> UiResult<()> {
-    // Get the selected item name or default to empty string
-    let selected_item = context.get_selected_item().unwrap();
+    // Get the selected item name or show "Nothing selected"
+    let selected_item = context.get_selected_item()
+        .map(|s| s.as_str())
+        .unwrap_or("[Nothing selected]");
+
+    // Get the preview content
+    let preview_content = context.get_preview_content()
+        .map(|s| s.as_str())
+        .unwrap_or("No preview available");
+
+    // Create inner area for content (inside the border)
+    let inner_area = Rect {
+        x: area.x + 1,
+        y: area.y + 1,
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(2),
+    };
 
     // Create a styled block for the preview
     let preview_block = Block::default()
@@ -124,11 +139,15 @@ fn render_preview_panel(frame: &mut Frame, area: &Rect, context: &mut Context) -
         .title(format!(" Preview: {} ", selected_item))
         .title_alignment(Alignment::Center);
 
-    // Render the preview block
-    frame.render_widget(preview_block, *area);
+    // Create paragraph with the preview content
+    let preview_paragraph = Paragraph::new(preview_content)
+        .style(Style::default().fg(Color::White))
+        .wrap(Wrap { trim: false })
+        .scroll((0, 0));
 
-    // TODO: Add file preview content based on the selected item type
-    // For example: text preview for text files, image info for images, etc.
+    // Render the preview block and content
+    frame.render_widget(preview_block, *area);
+    frame.render_widget(preview_paragraph, inner_area);
 
     Ok(())
 }

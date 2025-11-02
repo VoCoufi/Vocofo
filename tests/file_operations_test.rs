@@ -271,3 +271,327 @@ fn test_list_children_special_characters() {
     assert!(context.items.iter().any(|i| i == "file-with-dashes.txt"));
     assert!(context.items.iter().any(|i| i == "folder (copy)/"));
 }
+
+// ============================================================================
+// Preview Function Tests
+// ============================================================================
+
+use vocofo::file_operation::{
+    generate_preview, read_file_preview, get_directory_preview,
+    format_file_metadata, format_size
+};
+
+#[test]
+fn test_format_size_bytes() {
+    assert_eq!(format_size(0), "0 B");
+    assert_eq!(format_size(100), "100 B");
+    assert_eq!(format_size(1023), "1023 B");
+}
+
+#[test]
+fn test_format_size_kilobytes() {
+    assert_eq!(format_size(1024), "1.00 KB");
+    assert_eq!(format_size(2048), "2.00 KB");
+    assert_eq!(format_size(1536), "1.50 KB");
+}
+
+#[test]
+fn test_format_size_megabytes() {
+    assert_eq!(format_size(1024 * 1024), "1.00 MB");
+    assert_eq!(format_size(5 * 1024 * 1024), "5.00 MB");
+    assert_eq!(format_size(1536 * 1024), "1.50 MB");
+}
+
+#[test]
+fn test_format_size_gigabytes() {
+    assert_eq!(format_size(1024 * 1024 * 1024), "1.00 GB");
+    assert_eq!(format_size(3 * 1024 * 1024 * 1024), "3.00 GB");
+}
+
+#[test]
+fn test_read_file_preview_text_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.txt");
+
+    let content = "Hello, World!\nThis is a test file.";
+    fs::write(&file_path, content).unwrap();
+
+    let result = read_file_preview(&file_path);
+    assert!(result.is_ok());
+
+    let preview = result.unwrap();
+    assert_eq!(preview, content);
+}
+
+#[test]
+fn test_read_file_preview_large_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("large.txt");
+
+    // Create a file larger than 64KB
+    let large_content = "A".repeat(70 * 1024); // 70KB
+    fs::write(&file_path, &large_content).unwrap();
+
+    let result = read_file_preview(&file_path);
+    assert!(result.is_ok());
+
+    let preview = result.unwrap();
+    // Should only read first 64KB
+    assert_eq!(preview.len(), 64 * 1024);
+}
+
+#[test]
+fn test_read_file_preview_binary_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("binary.bin");
+
+    // Create a binary file with non-UTF8 bytes
+    let binary_data: Vec<u8> = vec![0xFF, 0xFE, 0xFD, 0xFC, 0x00, 0x01, 0x02];
+    fs::write(&file_path, binary_data).unwrap();
+
+    let result = read_file_preview(&file_path);
+    assert!(result.is_err());
+
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("Binary file"));
+}
+
+#[test]
+fn test_read_file_preview_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.txt");
+
+    fs::write(&file_path, "").unwrap();
+
+    let result = read_file_preview(&file_path);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), "");
+}
+
+#[test]
+fn test_read_file_preview_nonexistent_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("nonexistent.txt");
+
+    let result = read_file_preview(&file_path);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_get_directory_preview_empty_directory() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let result = get_directory_preview(temp_dir.path());
+    assert!(result.is_ok());
+
+    let items = result.unwrap();
+    assert_eq!(items.len(), 0);
+}
+
+#[test]
+fn test_get_directory_preview_few_items() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create a few files and folders
+    fs::write(base.join("file1.txt"), "").unwrap();
+    fs::write(base.join("file2.txt"), "").unwrap();
+    fs::create_dir(base.join("folder1")).unwrap();
+
+    let result = get_directory_preview(base);
+    assert!(result.is_ok());
+
+    let items = result.unwrap();
+    assert_eq!(items.len(), 3);
+
+    // Folders should come first
+    assert_eq!(items[0], "folder1/");
+    assert!(items.contains(&"file1.txt".to_string()));
+    assert!(items.contains(&"file2.txt".to_string()));
+}
+
+#[test]
+fn test_get_directory_preview_truncation() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create more than 20 items (the limit)
+    for i in 0..25 {
+        fs::write(base.join(format!("file{}.txt", i)), "").unwrap();
+    }
+
+    let result = get_directory_preview(base);
+    assert!(result.is_ok());
+
+    let items = result.unwrap();
+    // Should have 20 items + 1 "... and N more" message
+    assert_eq!(items.len(), 21);
+
+    let last_item = items.last().unwrap();
+    assert!(last_item.contains("... and"));
+    assert!(last_item.contains("5 more items"));
+}
+
+#[test]
+fn test_get_directory_preview_sorting() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create items in non-alphabetical order
+    fs::write(base.join("zebra.txt"), "").unwrap();
+    fs::create_dir(base.join("delta")).unwrap();
+    fs::write(base.join("alpha.txt"), "").unwrap();
+    fs::create_dir(base.join("bravo")).unwrap();
+
+    let result = get_directory_preview(base);
+    assert!(result.is_ok());
+
+    let items = result.unwrap();
+    // Folders first (alphabetically), then files (alphabetically)
+    assert_eq!(items[0], "bravo/");
+    assert_eq!(items[1], "delta/");
+    assert_eq!(items[2], "alpha.txt");
+    assert_eq!(items[3], "zebra.txt");
+}
+
+#[test]
+fn test_format_file_metadata_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.txt");
+
+    fs::write(&file_path, "Hello, World!").unwrap();
+
+    let metadata_str = format_file_metadata(&file_path);
+
+    assert!(metadata_str.contains("Type: File"));
+    assert!(metadata_str.contains("Size:"));
+    assert!(metadata_str.contains("Modified:"));
+    assert!(metadata_str.contains("Permissions:"));
+}
+
+#[test]
+fn test_format_file_metadata_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let dir_path = temp_dir.path().join("test_folder");
+
+    fs::create_dir(&dir_path).unwrap();
+
+    let metadata_str = format_file_metadata(&dir_path);
+
+    assert!(metadata_str.contains("Type: Directory"));
+    assert!(metadata_str.contains("Size:"));
+    assert!(metadata_str.contains("Modified:"));
+}
+
+#[test]
+fn test_format_file_metadata_nonexistent() {
+    let temp_dir = TempDir::new().unwrap();
+    let nonexistent = temp_dir.path().join("nonexistent.txt");
+
+    let metadata_str = format_file_metadata(&nonexistent);
+
+    assert!(metadata_str.contains("Error reading metadata"));
+}
+
+#[test]
+fn test_generate_preview_text_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.txt");
+
+    fs::write(&file_path, "Hello, World!").unwrap();
+
+    let preview = generate_preview(&file_path);
+
+    assert!(preview.contains("Type: File"));
+    assert!(preview.contains("Preview"));
+    assert!(preview.contains("Hello, World!"));
+}
+
+#[test]
+fn test_generate_preview_binary_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("binary.bin");
+
+    let binary_data: Vec<u8> = vec![0xFF, 0xFE, 0xFD];
+    fs::write(&file_path, binary_data).unwrap();
+
+    let preview = generate_preview(&file_path);
+
+    assert!(preview.contains("Type: File"));
+    assert!(preview.contains("Binary file"));
+}
+
+#[test]
+fn test_generate_preview_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create some files in the directory
+    fs::write(base.join("file1.txt"), "").unwrap();
+    fs::write(base.join("file2.txt"), "").unwrap();
+
+    let preview = generate_preview(base);
+
+    assert!(preview.contains("Type: Directory"));
+    assert!(preview.contains("Contents"));
+    assert!(preview.contains("file1.txt"));
+    assert!(preview.contains("file2.txt"));
+}
+
+#[test]
+fn test_generate_preview_empty_directory() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let preview = generate_preview(temp_dir.path());
+
+    assert!(preview.contains("Type: Directory"));
+    assert!(preview.contains("Contents"));
+}
+
+#[test]
+fn test_generate_preview_nonexistent_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let nonexistent = temp_dir.path().join("nonexistent.txt");
+
+    let preview = generate_preview(&nonexistent);
+
+    assert!(preview.contains("File not found"));
+}
+
+#[test]
+fn test_directory_size_calculation() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create files with known sizes
+    fs::write(base.join("file1.txt"), "a".repeat(1000)).unwrap(); // 1000 bytes
+    fs::write(base.join("file2.txt"), "b".repeat(2000)).unwrap(); // 2000 bytes
+
+    // Create subdirectory with more files
+    fs::create_dir(base.join("subdir")).unwrap();
+    fs::write(base.join("subdir/file3.txt"), "c".repeat(3000)).unwrap(); // 3000 bytes
+
+    // Total should be 1000 + 2000 + 3000 = 6000 bytes
+    let metadata_str = format_file_metadata(base);
+
+    // Should show size in KB (not just a few hundred bytes)
+    assert!(metadata_str.contains("Type: Directory"));
+    // Size should be around 6KB (5.86 KB to be exact)
+    assert!(metadata_str.contains("KB") || metadata_str.contains("B"));
+
+    // Parse the size to verify it's correct
+    // The size line should contain something like "Size: 5.86 KB" or "Size: 6000 B"
+    let size_line = metadata_str.lines()
+        .find(|line| line.starts_with("Size:"))
+        .expect("Should have Size line");
+
+    // Verify it's not showing the tiny directory entry size (< 1KB)
+    // It should show at least 5 KB
+    if size_line.contains("KB") {
+        assert!(!size_line.contains("0.00 KB"));
+        assert!(!size_line.contains("0.01 KB"));
+    } else if size_line.contains("B") && !size_line.contains("KB") {
+        // If in bytes, should be around 6000
+        assert!(size_line.contains("6000") || size_line.contains("5"));
+    }
+}

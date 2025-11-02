@@ -16,6 +16,8 @@ use std::path::PathBuf;
 /// * `confirm_popup` - A boolean flag to indicate if a confirmation popup is active or required.
 /// * `confirm_popup_size` - A boolean flag that determines whether the size of the confirmation popup needs to be adjusted or checked.
 /// * `input` - A `String` representing the user's input or a field for capturing user-typed text.
+/// * `preview_content` - Cached preview content for the currently selected item.
+/// * `preview_last_item` - Tracks which item is currently cached to avoid re-reading.
 pub struct Context {
     pub exit: bool,
     pub path: String,
@@ -27,6 +29,8 @@ pub struct Context {
     pub confirm_popup_size: bool,
     pub input: String,
     pub copy_path: String,
+    pub preview_content: Option<String>,
+    pub preview_last_item: Option<String>,
 }
 
 /// Represents different UI states
@@ -51,6 +55,8 @@ impl Context {
             confirm_popup_size: false,
             input: String::default(),
             copy_path: String::default(),
+            preview_content: None,
+            preview_last_item: None,
         })
     }
     
@@ -212,5 +218,46 @@ impl Context {
     
     pub fn get_state(&self) -> usize {
         self.state
+    }
+
+    /// Updates the preview content if the selected item has changed.
+    /// Uses caching to avoid re-reading the same file on every frame.
+    pub fn update_preview(&mut self) {
+        // Get the currently selected item
+        let selected_item = match self.get_selected_item() {
+            Some(item) => item.clone(),
+            None => {
+                self.preview_content = None;
+                self.preview_last_item = None;
+                return;
+            }
+        };
+
+        // Check if we need to update (item changed)
+        if let Some(ref last_item) = self.preview_last_item {
+            if last_item == &selected_item && self.preview_content.is_some() {
+                // Same item, preview already cached
+                return;
+            }
+        }
+
+        // Build full path
+        // Special case: if "../" is selected, preview the current directory instead
+        let full_path = if selected_item == "../" {
+            PathBuf::from(&self.path)
+        } else {
+            PathBuf::from(&self.path).join(&selected_item)
+        };
+
+        // Generate preview content
+        let preview = file_operation::generate_preview(&full_path);
+
+        self.preview_content = Some(preview);
+        self.preview_last_item = Some(selected_item);
+    }
+
+    /// Returns the cached preview content
+    pub fn get_preview_content(&self) -> Option<&String> {
+        self.preview_content.as_ref()
     }
 }

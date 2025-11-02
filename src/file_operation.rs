@@ -405,3 +405,209 @@ fn resolve_path_from(context: &mut Context) -> FileResult<PathBuf> {
 
     Ok(base_path)
 }
+
+/// Reads up to 64KB of a file for preview
+/// Returns error if file is binary (non-UTF8) or unreadable
+pub fn read_file_preview(path: &Path) -> FileResult<String> {
+    use std::io::Read;
+
+    const MAX_PREVIEW_SIZE: usize = 64 * 1024; // 64KB
+
+    let mut file = fs::File::open(path)?;
+    let mut buffer = vec![0u8; MAX_PREVIEW_SIZE];
+
+    let bytes_read = file.read(&mut buffer)?;
+    buffer.truncate(bytes_read);
+
+    // Try to convert to UTF-8
+    match String::from_utf8(buffer) {
+        Ok(text) => Ok(text),
+        Err(_) => Err(Box::new(Error::new(
+            io::ErrorKind::InvalidData,
+            "Binary file - cannot preview"
+        )))
+    }
+}
+
+/// Gets a preview of directory contents (first 20 items)
+pub fn get_directory_preview(path: &Path) -> FileResult<Vec<String>> {
+    const MAX_ITEMS: usize = 20;
+
+    let mut folders = Vec::new();
+    let mut files = Vec::new();
+    let mut total_count = 0;
+
+    for entry_result in fs::read_dir(path)? {
+        let entry = entry_result?;
+        let file_name = entry.file_name()
+            .into_string()
+            .map_err(|_| Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid UTF-8 in filename"
+            ))?;
+
+        let metadata = entry.metadata()?;
+        total_count += 1;
+
+        if folders.len() + files.len() >= MAX_ITEMS {
+            continue;
+        }
+
+        if metadata.is_dir() {
+            folders.push(format!("{}/", file_name));
+        } else {
+            files.push(file_name);
+        }
+    }
+
+    folders.sort();
+    files.sort();
+
+    let mut result = folders;
+    result.extend(files);
+
+    // Add "... and N more" if truncated
+    if total_count > MAX_ITEMS {
+        result.push(format!("... and {} more items", total_count - MAX_ITEMS));
+    }
+
+    Ok(result)
+}
+
+/// Calculate the total size of a directory recursively
+fn calculate_directory_size(path: &Path) -> u64 {
+    let mut total_size = 0u64;
+
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_file() {
+                    total_size += metadata.len();
+                } else if metadata.is_dir() {
+                    // Recursively calculate subdirectory size
+                    total_size += calculate_directory_size(&entry.path());
+                }
+            }
+        }
+    }
+
+    total_size
+}
+
+/// Formats file metadata for display
+pub fn format_file_metadata(path: &Path) -> String {
+    let metadata = match fs::metadata(path) {
+        Ok(m) => m,
+        Err(e) => return format!("Error reading metadata: {}", e),
+    };
+
+    let file_type = if metadata.is_dir() {
+        "Directory"
+    } else if metadata.is_file() {
+        "File"
+    } else {
+        "Other"
+    };
+
+    // For directories, calculate actual size by summing all files
+    let size = if metadata.is_dir() {
+        format_size(calculate_directory_size(path))
+    } else {
+        format_size(metadata.len())
+    };
+
+    let modified = metadata.modified()
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .map(|elapsed| {
+            let secs = elapsed.as_secs();
+            if secs < 60 {
+                format!("{} seconds ago", secs)
+            } else if secs < 3600 {
+                format!("{} minutes ago", secs / 60)
+            } else if secs < 86400 {
+                format!("{} hours ago", secs / 3600)
+            } else {
+                format!("{} days ago", secs / 86400)
+            }
+        })
+        .unwrap_or_else(|| "Unknown".to_string());
+
+    let permissions = if metadata.permissions().readonly() {
+        "Read-only"
+    } else {
+        "Read/Write"
+    };
+
+    format!(
+        "Type: {}\nSize: {}\nModified: {}\nPermissions: {}",
+        file_type, size, modified, permissions
+    )
+}
+
+/// Formats file size in human-readable format
+pub fn format_size(size: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if size >= GB {
+        format!("{:.2} GB", size as f64 / GB as f64)
+    } else if size >= MB {
+        format!("{:.2} MB", size as f64 / MB as f64)
+    } else if size >= KB {
+        format!("{:.2} KB", size as f64 / KB as f64)
+    } else {
+        format!("{} B", size)
+    }
+}
+
+/// Main function to generate preview content for any path
+pub fn generate_preview(path: &Path) -> String {
+    // Get metadata header
+    let metadata_str = format_file_metadata(path);
+
+    // Check if path exists
+    if !path.exists() {
+        return format!("{}\n\n[File not found]", metadata_str);
+    }
+
+    let metadata = match fs::metadata(path) {
+        Ok(m) => m,
+        Err(e) => return format!("{}\n\n[Error: {}]", metadata_str, e),
+    };
+
+    // Handle directories
+    if metadata.is_dir() {
+        match get_directory_preview(path) {
+            Ok(items) => {
+                let mut result = metadata_str;
+                result.push_str("\n\n=== Contents ===\n");
+                for item in items {
+                    result.push_str(&format!("  {}\n", item));
+                }
+                result
+            },
+            Err(e) => format!("{}\n\n[Error reading directory: {}]", metadata_str, e),
+        }
+    }
+    // Handle files
+    else if metadata.is_file() {
+        match read_file_preview(path) {
+            Ok(content) => {
+                let mut result = metadata_str;
+                result.push_str("\n\n=== Preview ===\n");
+                result.push_str(&content);
+                result
+            },
+            Err(e) => {
+                // Binary file or read error
+                format!("{}\n\n[{}]", metadata_str, e)
+            }
+        }
+    }
+    // Handle other types
+    else {
+        format!("{}\n\n[Special file type]", metadata_str)
+    }
+}
