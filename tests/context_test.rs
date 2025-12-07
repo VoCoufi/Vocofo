@@ -296,3 +296,178 @@ fn test_multiple_ui_state_changes() {
         assert_eq!(context.get_ui_state(), Some(state));
     }
 }
+
+// ============================================================================
+// Preview Panel Tests
+// ============================================================================
+
+#[test]
+fn test_context_new_has_no_preview() {
+    let context = Context::new().unwrap();
+    assert!(context.preview_content.is_none());
+    assert!(context.preview_last_item.is_none());
+}
+
+#[test]
+fn test_get_preview_content_empty() {
+    let context = Context::new().unwrap();
+    assert!(context.get_preview_content().is_none());
+}
+
+#[test]
+fn test_update_preview_with_no_selection() {
+    let mut context = Context::new().unwrap();
+    context.update_preview();
+
+    // Should remain None when nothing is selected
+    assert!(context.get_preview_content().is_none());
+    assert!(context.preview_last_item.is_none());
+}
+
+#[test]
+fn test_update_preview_with_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create a test file
+    fs::write(base.join("test.txt"), "Hello, World!").unwrap();
+
+    let mut context = Context::new().unwrap();
+    context.path = base.to_string_lossy().to_string();
+
+    // Populate items list
+    vocofo::file_operation::list_children(&mut context).unwrap();
+
+    // Move to first real item (not "../")
+    context.state = 1;
+
+    // Update preview
+    context.update_preview();
+
+    // Should have preview content
+    assert!(context.get_preview_content().is_some());
+    assert!(context.preview_last_item.is_some());
+
+    let preview = context.get_preview_content().unwrap();
+    assert!(preview.contains("Type: File"));
+    assert!(preview.contains("Hello, World!"));
+}
+
+#[test]
+fn test_update_preview_with_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create a test directory with files
+    fs::create_dir(base.join("test_folder")).unwrap();
+    fs::write(base.join("test_folder/file1.txt"), "content1").unwrap();
+    fs::write(base.join("test_folder/file2.txt"), "content2").unwrap();
+
+    let mut context = Context::new().unwrap();
+    context.path = base.to_string_lossy().to_string();
+
+    // Populate items list
+    vocofo::file_operation::list_children(&mut context).unwrap();
+
+    // Move to the folder (should be at index 1 after "../")
+    context.state = 1;
+
+    // Update preview
+    context.update_preview();
+
+    // Should have preview content
+    assert!(context.get_preview_content().is_some());
+    let preview = context.get_preview_content().unwrap();
+
+    assert!(preview.contains("Type: Directory"));
+    assert!(preview.contains("Contents"));
+}
+
+#[test]
+fn test_update_preview_caching() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create a test file
+    fs::write(base.join("test.txt"), "Hello, World!").unwrap();
+
+    let mut context = Context::new().unwrap();
+    context.path = base.to_string_lossy().to_string();
+
+    // Populate items list
+    vocofo::file_operation::list_children(&mut context).unwrap();
+
+    // Move to first real item
+    context.state = 1;
+
+    // First update
+    context.update_preview();
+    let first_preview = context.get_preview_content().unwrap().clone();
+    let first_last_item = context.preview_last_item.clone();
+
+    // Second update without changing selection
+    context.update_preview();
+    let second_preview = context.get_preview_content().unwrap().clone();
+    let second_last_item = context.preview_last_item.clone();
+
+    // Should be the same (cached)
+    assert_eq!(first_preview, second_preview);
+    assert_eq!(first_last_item, second_last_item);
+}
+
+#[test]
+fn test_update_preview_invalidates_cache_on_selection_change() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create test files
+    fs::write(base.join("file1.txt"), "Content 1").unwrap();
+    fs::write(base.join("file2.txt"), "Content 2").unwrap();
+
+    let mut context = Context::new().unwrap();
+    context.path = base.to_string_lossy().to_string();
+
+    // Populate items list
+    vocofo::file_operation::list_children(&mut context).unwrap();
+
+    // Select first file
+    context.state = 1;
+    context.update_preview();
+    let first_preview = context.get_preview_content().unwrap().clone();
+
+    // Change selection to second file
+    context.state = 2;
+    context.update_preview();
+    let second_preview = context.get_preview_content().unwrap().clone();
+
+    // Previews should be different
+    assert_ne!(first_preview, second_preview);
+}
+
+#[test]
+fn test_update_preview_for_parent_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create some files in the directory
+    fs::write(base.join("file1.txt"), "content1").unwrap();
+    fs::write(base.join("file2.txt"), "content2").unwrap();
+
+    let mut context = Context::new().unwrap();
+    context.path = base.to_string_lossy().to_string();
+
+    // Populate items list
+    vocofo::file_operation::list_children(&mut context).unwrap();
+
+    // Select "../" (index 0)
+    context.state = 0;
+    context.update_preview();
+
+    // Should preview the current directory
+    assert!(context.get_preview_content().is_some());
+    let preview = context.get_preview_content().unwrap();
+
+    // Should show current directory contents
+    assert!(preview.contains("Type: Directory"));
+    assert!(preview.contains("Contents"));
+}

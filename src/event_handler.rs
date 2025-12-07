@@ -71,6 +71,10 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
         }
         _ => {}
     }
+
+    // Update preview after any navigation or state change
+    context.update_preview();
+
     Ok(())
 }
 

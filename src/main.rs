@@ -106,11 +106,15 @@ fn run_app(
     context: &mut Context) -> AppResult<()> {
     const POLL_TIMEOUT: Duration = Duration::from_millis(50);
 
+    // Populate the item list and initialize the preview for the first selected item
+    file_operation::list_children(context)?;
+    context.update_preview();
+
     loop {
         // Render the UI
         terminal.draw(|frame| ui::ui(frame, context).expect("REASON"))?;
 
-        // Handle events and break loop if exit is requested
+        // Handle events and break the loop if exit is requested
         if handle_events(context, POLL_TIMEOUT)? {
             break;
         }
