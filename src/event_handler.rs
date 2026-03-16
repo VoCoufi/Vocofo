@@ -57,14 +57,16 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
             context.set_ui_state(UiState::CreatePopup);
         }
         (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-            // TODO: context.set_status_message("✓ Copied to clipboard");
             context.set_copy_path();
+            context.set_status_message("Copied to clipboard");
         }
         (KeyCode::Char('v'), KeyModifiers::CONTROL) => {
             if context.get_copy_path().is_empty() {
-                return Ok(()); // TODO - Handle error
+                context.set_status_message("Nothing to paste — copy a file first");
+                return Ok(());
             }
             file_operation::copy_file(context)?;
+            context.set_status_message("Pasted successfully");
         }
         (KeyCode::Char('d'), _) => {
             context.set_ui_state(UiState::ConfirmDelete);
@@ -166,19 +168,19 @@ pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) ->
             context.set_ui_state(UiState::Normal);
         }
         KeyCode::Left => {
-            if !context.get_confirm_button_selected().unwrap() {
+            if !context.get_confirm_button_selected().unwrap_or(false) {
                 context.set_confirm_button_selected() // Set to true
             }
         }
         KeyCode::Right => {
-            if context.get_confirm_button_selected().unwrap() {
+            if context.get_confirm_button_selected().unwrap_or(false) {
                 context.set_confirm_button_selected() // Set to false
             }
         }
         KeyCode::Enter => {
             context.set_ui_state(UiState::Normal);
-            
-            if context.get_confirm_button_selected().unwrap() {
+
+            if context.get_confirm_button_selected().unwrap_or(false) {
                 // Delete a file
                 file_operation::handle_delete_operation(context)?;
                 context.set_confirm_button_selected()

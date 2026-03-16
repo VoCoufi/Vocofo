@@ -113,8 +113,9 @@ pub fn popup_confirm_delete(frame: &mut Frame, context: &mut Context) -> RenderR
     let is_yes_selected = context.get_confirm_button_selected();
 
     // Create sized buttons that will properly display their text
-    let yes_button = create_sized_button("Yes", is_yes_selected.unwrap());
-    let no_button = create_sized_button("No", !is_yes_selected.unwrap());
+    let selected = is_yes_selected.unwrap_or(false);
+    let yes_button = create_sized_button("Yes", selected);
+    let no_button = create_sized_button("No", !selected);
 
     // Render all components
     frame.render_widget(warning, chunks[0]);
@@ -163,7 +164,8 @@ pub fn popup_name_creation(frame: &mut Frame, context: &mut Context) -> RenderRe
         .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 
     // Get the input text or provide a default empty string
-    let input_text = context.get_input().unwrap();
+    let empty = String::new();
+    let input_text = context.get_input().unwrap_or(&empty);
     let para = Paragraph::new(input_text.clone())
         .block(
             Block::default()

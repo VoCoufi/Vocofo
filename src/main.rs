@@ -112,7 +112,7 @@ fn run_app(
 
     loop {
         // Render the UI
-        terminal.draw(|frame| ui::ui(frame, context).expect("REASON"))?;
+        terminal.draw(|frame| ui::ui(frame, context).expect("Failed to render UI"))?;
 
         // Handle events and break the loop if exit is requested
         if handle_events(context, POLL_TIMEOUT)? {
@@ -170,5 +170,5 @@ fn handle_events(context: &mut Context, timeout: Duration) -> AppResult<bool> {
     }
 
     // Return whether we should exit the application
-    Ok(context.get_exit().unwrap())
+    Ok(context.get_exit().unwrap_or(false))
 }

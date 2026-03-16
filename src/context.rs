@@ -31,6 +31,7 @@ pub struct Context {
     pub copy_path: String,
     pub preview_content: Option<String>,
     pub preview_last_item: Option<String>,
+    pub status_message: Option<String>,
 }
 
 /// Represents different UI states
@@ -57,6 +58,7 @@ impl Context {
             copy_path: String::default(),
             preview_content: None,
             preview_last_item: None,
+            status_message: None,
         })
     }
     
@@ -118,8 +120,6 @@ impl Context {
     }
 
     pub fn get_confirm_button_selected(&self) -> Option<bool> {
-        // This is a placeholder - implement in your Context struct
-        // For now, default to the safer option (No)
         Some(self.confirm_popup_size)
     }
     
@@ -150,7 +150,7 @@ impl Context {
         let dir_path = match file_operation::directory_path(&new_directory) {
             Ok(path) => path,
             Err(err) => {
-                //TODO error handling
+                self.status_message = Some(format!("Cannot open directory: {}", err));
                 return;
             }
         };
@@ -179,7 +179,7 @@ impl Context {
             match file_operation::open_file(&file_to_open) {
                 Ok(_) => (),
                 Err(err) => {
-                    //TODO error handling
+                    self.status_message = Some(format!("Cannot open file: {}", err));
                 }
             }
 
@@ -259,5 +259,17 @@ impl Context {
     /// Returns the cached preview content
     pub fn get_preview_content(&self) -> Option<&String> {
         self.preview_content.as_ref()
+    }
+
+    pub fn set_status_message(&mut self, message: &str) {
+        self.status_message = Some(message.to_string());
+    }
+
+    pub fn get_status_message(&self) -> Option<&String> {
+        self.status_message.as_ref()
+    }
+
+    pub fn clear_status_message(&mut self) {
+        self.status_message = None;
     }
 }
