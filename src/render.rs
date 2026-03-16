@@ -14,9 +14,20 @@ type RenderResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 /// Renders the left directory panel with a file/folder list
 pub fn render_left_directory(frame: &mut Frame, inner_layout: Rc<Vec<Rect>>, context: &mut Context) -> RenderResult<()> {
-    // Get the list of files and folders from the current path
-    let items = file_operation::list_children(context)
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+    // Only re-read directory if cache is invalid
+    let needs_refresh = match &context.cached_list_path {
+        Some(cached_path) => cached_path != &context.path,
+        None => true,
+    };
+
+    if needs_refresh {
+        let items = file_operation::list_children(context)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        context.cached_list_path = Some(context.path.clone());
+        context.cached_list_items = Some(items);
+    }
+
+    let items = context.cached_list_items.clone().unwrap_or_default();
 
     // Create a styled list widget
     let list = create_directory_list(&context.path, items, true);

@@ -563,35 +563,14 @@ fn test_directory_size_calculation() {
     let temp_dir = TempDir::new().unwrap();
     let base = temp_dir.path();
 
-    // Create files with known sizes
-    fs::write(base.join("file1.txt"), "a".repeat(1000)).unwrap(); // 1000 bytes
-    fs::write(base.join("file2.txt"), "b".repeat(2000)).unwrap(); // 2000 bytes
-
-    // Create subdirectory with more files
+    // Create files and a subdirectory
+    fs::write(base.join("file1.txt"), "a".repeat(1000)).unwrap();
+    fs::write(base.join("file2.txt"), "b".repeat(2000)).unwrap();
     fs::create_dir(base.join("subdir")).unwrap();
-    fs::write(base.join("subdir/file3.txt"), "c".repeat(3000)).unwrap(); // 3000 bytes
 
-    // Total should be 1000 + 2000 + 3000 = 6000 bytes
     let metadata_str = format_file_metadata(base);
 
-    // Should show size in KB (not just a few hundred bytes)
     assert!(metadata_str.contains("Type: Directory"));
-    // Size should be around 6KB (5.86 KB to be exact)
-    assert!(metadata_str.contains("KB") || metadata_str.contains("B"));
-
-    // Parse the size to verify it's correct
-    // The size line should contain something like "Size: 5.86 KB" or "Size: 6000 B"
-    let size_line = metadata_str.lines()
-        .find(|line| line.starts_with("Size:"))
-        .expect("Should have Size line");
-
-    // Verify it's not showing the tiny directory entry size (< 1KB)
-    // It should show at least 5 KB
-    if size_line.contains("KB") {
-        assert!(!size_line.contains("0.00 KB"));
-        assert!(!size_line.contains("0.01 KB"));
-    } else if size_line.contains("B") && !size_line.contains("KB") {
-        // If in bytes, should be around 6000
-        assert!(size_line.contains("6000") || size_line.contains("5"));
-    }
+    // Directories now show item count instead of recursive size
+    assert!(metadata_str.contains("3 items"));
 }

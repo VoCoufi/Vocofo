@@ -439,24 +439,23 @@ pub fn get_directory_preview(path: &Path) -> FileResult<Vec<String>> {
 
     for entry_result in fs::read_dir(path)? {
         let entry = entry_result?;
-        let file_name = entry.file_name()
-            .into_string()
-            .map_err(|_| Error::new(
-                io::ErrorKind::InvalidData,
-                "Invalid UTF-8 in filename"
-            ))?;
-
-        let metadata = entry.metadata()?;
         total_count += 1;
 
-        if folders.len() + files.len() >= MAX_ITEMS {
-            continue;
-        }
+        if folders.len() + files.len() < MAX_ITEMS {
+            let file_name = entry.file_name()
+                .into_string()
+                .map_err(|_| Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid UTF-8 in filename"
+                ))?;
 
-        if metadata.is_dir() {
-            folders.push(format!("{}/", file_name));
-        } else {
-            files.push(file_name);
+            let metadata = entry.metadata()?;
+
+            if metadata.is_dir() {
+                folders.push(format!("{}/", file_name));
+            } else {
+                files.push(file_name);
+            }
         }
     }
 
@@ -474,26 +473,6 @@ pub fn get_directory_preview(path: &Path) -> FileResult<Vec<String>> {
     Ok(result)
 }
 
-/// Calculate the total size of a directory recursively
-fn calculate_directory_size(path: &Path) -> u64 {
-    let mut total_size = 0u64;
-
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries.flatten() {
-            if let Ok(metadata) = entry.metadata() {
-                if metadata.is_file() {
-                    total_size += metadata.len();
-                } else if metadata.is_dir() {
-                    // Recursively calculate subdirectory size
-                    total_size += calculate_directory_size(&entry.path());
-                }
-            }
-        }
-    }
-
-    total_size
-}
-
 /// Formats file metadata for display
 pub fn format_file_metadata(path: &Path) -> String {
     let metadata = match fs::metadata(path) {
@@ -509,9 +488,15 @@ pub fn format_file_metadata(path: &Path) -> String {
         "Other"
     };
 
-    // For directories, calculate actual size by summing all files
+    // For directories, count items instead of calculating recursive size
     let size = if metadata.is_dir() {
-        format_size(calculate_directory_size(path))
+        match fs::read_dir(path) {
+            Ok(entries) => {
+                let count = entries.count();
+                format!("{} items", count)
+            }
+            Err(_) => "Unknown".to_string(),
+        }
     } else {
         format_size(metadata.len())
     };

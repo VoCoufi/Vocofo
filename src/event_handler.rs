@@ -42,9 +42,11 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
         }
         (KeyCode::Enter, _) => {
             context.open_item();
+            context.invalidate_directory_cache();
         }
         (KeyCode::Tab, _) => {
             file_operation::open_dir(context)?;
+            context.invalidate_directory_cache();
         }
         (KeyCode::Down, _) => {
             if context.items.len() > context.state + 1 {
@@ -69,6 +71,7 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
                 return Ok(());
             }
             file_operation::copy_file(context)?;
+            context.invalidate_directory_cache();
             context.set_status_message("Pasted successfully");
         }
         (KeyCode::Char('d'), _) => {
@@ -120,6 +123,7 @@ pub fn handle_popup_event(context: &mut Context, key_event: KeyEvent) -> EventRe
         }
         KeyCode::Enter => {
             file_operation::handle_create_directory(context)?;
+            context.invalidate_directory_cache();
         }
         KeyCode::Esc => {
             context.set_ui_state(UiState::Normal);
@@ -165,7 +169,8 @@ pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) ->
             context.set_confirm_button_selected();
             
             // Delete file
-            file_operation::handle_delete_operation(context)?
+            file_operation::handle_delete_operation(context)?;
+            context.invalidate_directory_cache();
         }
         KeyCode::Char('n') | KeyCode::Esc => {
             context.set_ui_state(UiState::Normal);
@@ -186,6 +191,7 @@ pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) ->
             if context.get_confirm_button_selected().unwrap_or(false) {
                 // Delete a file
                 file_operation::handle_delete_operation(context)?;
+                context.invalidate_directory_cache();
                 context.set_confirm_button_selected()
             }
         }

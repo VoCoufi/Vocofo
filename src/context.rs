@@ -1,4 +1,5 @@
 use crate::file_operation;
+use ratatui::widgets::ListItem;
 use std::fs;
 use std::fs::Metadata;
 use std::path::PathBuf;
@@ -32,6 +33,8 @@ pub struct Context {
     pub preview_content: Option<String>,
     pub preview_last_item: Option<String>,
     pub status_message: Option<String>,
+    pub cached_list_items: Option<Vec<ListItem<'static>>>,
+    pub cached_list_path: Option<String>,
 }
 
 /// Represents different UI states
@@ -59,6 +62,8 @@ impl Context {
             preview_content: None,
             preview_last_item: None,
             status_message: None,
+            cached_list_items: None,
+            cached_list_path: None,
         })
     }
     
@@ -259,6 +264,11 @@ impl Context {
     /// Returns the cached preview content
     pub fn get_preview_content(&self) -> Option<&String> {
         self.preview_content.as_ref()
+    }
+
+    pub fn invalidate_directory_cache(&mut self) {
+        self.cached_list_items = None;
+        self.cached_list_path = None;
     }
 
     pub fn set_status_message(&mut self, message: &str) {
