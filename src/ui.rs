@@ -20,7 +20,7 @@ pub fn ui(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
 
     // Render the application components
     render_title_bar(frame, &main_layout[0]);
-    render_status_bar(frame, &main_layout[2]);
+    render_status_bar(frame, &main_layout[2], context);
 
     // Create the file browser layout
     let browser_layout = create_browser_layout(&main_layout[1]);
@@ -68,12 +68,16 @@ fn render_title_bar(frame: &mut Frame, area: &Rect) {
     frame.render_widget(title_block, *area);
 }
 
-/// Renders the status bar with keyboard shortcuts
-fn render_status_bar(frame: &mut Frame, area: &Rect) {
-    let shortcuts = create_keyboard_shortcuts();
+/// Renders the status bar with either a status message or keyboard shortcuts
+fn render_status_bar(frame: &mut Frame, area: &Rect, context: &Context) {
+    let (text, style) = if let Some(message) = context.get_status_message() {
+        (message.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+    } else {
+        (create_keyboard_shortcuts(), Style::default().fg(Color::White))
+    };
 
-    let status_bar = Paragraph::new(shortcuts)
-        .style(Style::default().fg(Color::White))
+    let status_bar = Paragraph::new(text)
+        .style(style)
         .alignment(Alignment::Left);
 
     frame.render_widget(status_bar, *area);

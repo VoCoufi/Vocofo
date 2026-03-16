@@ -33,6 +33,9 @@ type EventResult = Result<(), Box<dyn std::error::Error>>;
 ///
 /// This function serves as the main entry point for handling user input within the context of the application workflow. It relies on the state and functionality provided by the `Context` object, as well as external file operation utilities where applicable.
 pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+    // Clear status message on any new key press
+    context.clear_status_message();
+
     match (key_event.code, key_event.modifiers) {
         (KeyCode::Char('q'), _) | (KeyCode::Esc, _) => {
             context.set_exit();
