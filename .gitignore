@@ -1,0 +1,21 @@
+# Build artifacts
+/target/
+
+# Cargo lock (binary project - optional, but often committed)
+# Uncomment if you don't want to track it:
+# Cargo.lock
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Planning docs (not part of source)
+1.0-release-plan.md
+project-critique.md
