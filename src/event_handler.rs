@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use crate::context::{Context, UiState};
 use crate::file_operation;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -45,8 +46,10 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
             context.invalidate_directory_cache();
         }
         (KeyCode::Tab, _) => {
-            file_operation::open_dir(context)?;
-            context.invalidate_directory_cache();
+            match file_operation::open_dir(context) {
+                Ok(_) => context.invalidate_directory_cache(),
+                Err(e) => context.set_status_message(&format!("Cannot open directory: {}", e)),
+            }
         }
         (KeyCode::Down, _) => {
             if context.items.len() > context.state + 1 {
@@ -63,6 +66,7 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
         }
         (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
             context.set_copy_path();
+            context.clipboard_mode = crate::context::ClipboardMode::Copy;
             context.set_status_message("Copied to clipboard");
         }
         (KeyCode::Char('v'), KeyModifiers::CONTROL) => {
@@ -70,12 +74,43 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
                 context.set_status_message("Nothing to paste — copy a file first");
                 return Ok(());
             }
-            file_operation::copy_file(context)?;
-            context.invalidate_directory_cache();
-            context.set_status_message("Pasted successfully");
+            match file_operation::copy_file(context) {
+                Ok(_) => {
+                    if context.clipboard_mode == crate::context::ClipboardMode::Cut {
+                        let source = PathBuf::from(context.get_copy_path().clone());
+                        if let Err(e) = file_operation::delete(&source) {
+                            context.set_status_message(&format!("Copied but failed to remove source: {}", e));
+                        } else {
+                            context.copy_path = String::default();
+                            context.set_status_message("Moved successfully");
+                        }
+                    } else {
+                        context.set_status_message("Pasted successfully");
+                    }
+                    context.invalidate_directory_cache();
+                }
+                Err(e) => {
+                    context.set_status_message(&format!("Paste failed: {}", e));
+                }
+            }
+        }
+        (KeyCode::Char('x'), KeyModifiers::CONTROL) => {
+            context.set_copy_path();
+            context.clipboard_mode = crate::context::ClipboardMode::Cut;
+            context.set_status_message("Cut to clipboard");
         }
         (KeyCode::Char('d'), _) => {
             context.set_ui_state(UiState::ConfirmDelete);
+        }
+        (KeyCode::Char('r'), _) => {
+            if let Some(item) = context.get_selected_item() {
+                if item != "../" {
+                    // Pre-fill input with current name (without trailing slash)
+                    let name = item.trim_end_matches('/').to_string();
+                    context.set_input(name);
+                    context.set_ui_state(UiState::RenamePopup);
+                }
+            }
         }
         _ => {}
     }
@@ -122,11 +157,53 @@ pub fn handle_popup_event(context: &mut Context, key_event: KeyEvent) -> EventRe
             }
         }
         KeyCode::Enter => {
-            file_operation::handle_create_directory(context)?;
-            context.invalidate_directory_cache();
+            match file_operation::handle_create_directory(context) {
+                Ok(_) => {
+                    context.invalidate_directory_cache();
+                    context.set_status_message("Folder created");
+                }
+                Err(e) => {
+                    context.set_ui_state(UiState::Normal);
+                    context.set_input(String::default());
+                    context.set_status_message(&format!("Create failed: {}", e));
+                }
+            }
         }
         KeyCode::Esc => {
             context.set_ui_state(UiState::Normal);
+        }
+        KeyCode::Char(c) => {
+            context.input.push(c);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Handles key events for the rename popup
+pub fn handle_rename_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+    match key_event.code {
+        KeyCode::Backspace => {
+            if !context.input.is_empty() {
+                context.input.pop();
+            }
+        }
+        KeyCode::Enter => {
+            match file_operation::handle_rename(context) {
+                Ok(_) => {
+                    context.invalidate_directory_cache();
+                    context.set_status_message("Renamed successfully");
+                }
+                Err(e) => {
+                    context.set_ui_state(UiState::Normal);
+                    context.set_input(String::default());
+                    context.set_status_message(&format!("Rename failed: {}", e));
+                }
+            }
+        }
+        KeyCode::Esc => {
+            context.set_ui_state(UiState::Normal);
+            context.set_input(String::default());
         }
         KeyCode::Char(c) => {
             context.input.push(c);
@@ -167,10 +244,14 @@ pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) ->
         KeyCode::Char('y') => {
             context.set_ui_state(UiState::Normal);
             context.set_confirm_button_selected();
-            
-            // Delete file
-            file_operation::handle_delete_operation(context)?;
-            context.invalidate_directory_cache();
+
+            match file_operation::handle_delete_operation(context) {
+                Ok(_) => {
+                    context.invalidate_directory_cache();
+                    context.set_status_message("Deleted successfully");
+                }
+                Err(e) => context.set_status_message(&format!("Delete failed: {}", e)),
+            }
         }
         KeyCode::Char('n') | KeyCode::Esc => {
             context.set_ui_state(UiState::Normal);
@@ -189,9 +270,13 @@ pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) ->
             context.set_ui_state(UiState::Normal);
 
             if context.get_confirm_button_selected().unwrap_or(false) {
-                // Delete a file
-                file_operation::handle_delete_operation(context)?;
-                context.invalidate_directory_cache();
+                match file_operation::handle_delete_operation(context) {
+                    Ok(_) => {
+                        context.invalidate_directory_cache();
+                        context.set_status_message("Deleted successfully");
+                    }
+                    Err(e) => context.set_status_message(&format!("Delete failed: {}", e)),
+                }
                 context.set_confirm_button_selected()
             }
         }

@@ -30,11 +30,19 @@ pub struct Context {
     pub confirm_popup_size: bool,
     pub input: String,
     pub copy_path: String,
+    pub clipboard_mode: ClipboardMode,
     pub preview_content: Option<String>,
     pub preview_last_item: Option<String>,
     pub status_message: Option<String>,
     pub cached_list_items: Option<Vec<ListItem<'static>>>,
     pub cached_list_path: Option<String>,
+}
+
+/// Represents clipboard mode for copy/cut operations
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ClipboardMode {
+    Copy,
+    Cut,
 }
 
 /// Represents different UI states
@@ -43,6 +51,7 @@ pub enum UiState {
     Normal,
     CreatePopup,
     ConfirmDelete,
+    RenamePopup,
 }
 
 
@@ -59,6 +68,7 @@ impl Context {
             confirm_popup_size: false,
             input: String::default(),
             copy_path: String::default(),
+            clipboard_mode: ClipboardMode::Copy,
             preview_content: None,
             preview_last_item: None,
             status_message: None,

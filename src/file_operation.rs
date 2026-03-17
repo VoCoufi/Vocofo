@@ -268,6 +268,52 @@ pub fn handle_create_directory(context: &mut Context) -> FileResult<()> {
     Ok(())
 }
 
+/// Renames a file or directory
+pub fn rename(old_path: impl AsRef<Path>, new_path: impl AsRef<Path>) -> Result<()> {
+    let old = old_path.as_ref();
+    let new = new_path.as_ref();
+
+    if !old.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Source does not exist: {}", old.display()),
+        ));
+    }
+
+    if new.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("Target already exists: {}", new.display()),
+        ));
+    }
+
+    fs::rename(old, new)
+}
+
+/// Handle rename operation from user input
+pub fn handle_rename(context: &mut Context) -> FileResult<()> {
+    let new_name = context.get_input()
+        .ok_or_else(|| Box::<dyn std::error::Error>::from("No input provided"))?
+        .clone();
+
+    if new_name.is_empty() {
+        return Err("Name cannot be empty".into());
+    }
+
+    let selected = context.get_selected_item()
+        .ok_or_else(|| Box::<dyn std::error::Error>::from("No item selected"))?
+        .clone();
+
+    let old_path = PathBuf::from(&context.path).join(&selected);
+    let new_path = PathBuf::from(&context.path).join(&new_name);
+
+    context.set_ui_state(Normal);
+    rename(&old_path, &new_path)?;
+    context.set_input(String::default());
+
+    Ok(())
+}
+
 /// Recursively copy a directory (contents) from `src` to `dst`.
 /// - Creates `dst` if it doesn't exist.
 /// - Skips `.` and `..`.

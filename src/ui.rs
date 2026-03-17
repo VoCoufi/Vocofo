@@ -191,6 +191,7 @@ fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
     match context.get_ui_state().ok_or("UI state not available")? {
         UiState::ConfirmDelete => render::popup_confirm_delete(frame, context)?,
         UiState::CreatePopup => render::popup_name_creation(frame, context)?,
+        UiState::RenamePopup => render::popup_rename(frame, context)?,
         UiState::Normal => ()
     }
     

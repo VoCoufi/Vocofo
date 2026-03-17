@@ -194,6 +194,55 @@ pub fn popup_name_creation(frame: &mut Frame, context: &mut Context) -> RenderRe
     Ok(())
 }
 
+/// Renders a rename popup
+pub fn popup_rename(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let area = centered_rect_dialog(frame.area(), 80, 10);
+
+    let dialog_block = Block::default()
+        .title(" Rename ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(0)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ])
+        .split(inner_area);
+
+    let label = Paragraph::new("Enter new name:")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+
+    let empty = String::new();
+    let input_text = context.get_input().unwrap_or(&empty);
+    let para = Paragraph::new(input_text.clone())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Black))
+                .padding(Padding::new(1, 1, 0, 0))
+        )
+        .alignment(Alignment::Left)
+        .style(Style::default().bg(Color::Blue).fg(Color::Black));
+
+    frame.render_widget(label, chunks[1]);
+    frame.render_widget(para, chunks[3]);
+
+    Ok(())
+}
+
 /// Creates a styled directory list widget
 fn create_directory_list<'a>(path: &str, items: Vec<ListItem<'a>>, is_primary: bool) -> List<'a> {
     let list = List::new(items)
