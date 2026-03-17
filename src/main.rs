@@ -112,7 +112,15 @@ fn run_app(
 
     loop {
         // Render the UI
-        terminal.draw(|frame| ui::ui(frame, context).expect("Failed to render UI"))?;
+        let mut render_error: Option<Box<dyn std::error::Error>> = None;
+        terminal.draw(|frame| {
+            if let Err(e) = ui::ui(frame, context) {
+                render_error = Some(e);
+            }
+        })?;
+        if let Some(e) = render_error {
+            return Err(e);
+        }
 
         // Handle events and break the loop if exit is requested
         if handle_events(context, POLL_TIMEOUT)? {

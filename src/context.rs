@@ -87,7 +87,7 @@ impl Context {
 
     /// Returns the increment state of this [`Context`].
     pub fn increment_state(&mut self) {
-        self.state += 1;
+        self.state = self.state.saturating_add(1);
     }
 
     pub fn decrease_state(&mut self) {
