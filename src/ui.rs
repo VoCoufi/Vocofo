@@ -42,9 +42,16 @@ fn create_main_layout(area: Rect) -> Rc<[Rect]> {
 }
 
 /// Creates the file browser layout with two equal panels
+/// Stacks vertically when terminal is taller than wide, horizontally otherwise
 fn create_browser_layout(area: &Rect) -> Rc<[Rect]> {
+    let direction = if area.height > area.width {
+        Direction::Vertical
+    } else {
+        Direction::Horizontal
+    };
+
     Layout::default()
-        .direction(Direction::Horizontal)
+        .direction(direction)
         .constraints([
             Constraint::Percentage(50),
             Constraint::Percentage(50),
