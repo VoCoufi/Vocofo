@@ -38,6 +38,11 @@ pub fn list_children(panel: &mut PanelState) -> Result<()> {
 
         let metadata = entry.metadata()?;
 
+        // Filter hidden files unless show_hidden is enabled
+        if !panel.show_hidden && file_name.starts_with('.') {
+            continue;
+        }
+
         if metadata.is_dir() {
             folders.push(format!("{}/", file_name));
         } else {

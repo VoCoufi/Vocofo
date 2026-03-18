@@ -1,5 +1,7 @@
 use crate::background_op::FileOpResult;
+use crate::config::Config;
 use crate::file_operation;
+use std::collections::HashSet;
 use std::fs;
 use std::fs::Metadata;
 use std::path::PathBuf;
@@ -13,6 +15,8 @@ pub struct PanelState {
     pub filter: String,
     pub state: usize,
     pub items_dirty: bool,
+    pub show_hidden: bool,
+    pub selected: HashSet<String>,
     pub preview_content: Option<String>,
     pub preview_last_item: Option<String>,
 }
@@ -26,6 +30,8 @@ impl PanelState {
             filter: String::new(),
             state: 0,
             items_dirty: true,
+            show_hidden: false,
+            selected: HashSet::new(),
             preview_content: None,
             preview_last_item: None,
         }
@@ -164,6 +170,40 @@ impl PanelState {
     pub fn get_state(&self) -> usize {
         self.state
     }
+
+    pub fn toggle_selection(&mut self) {
+        if let Some(item) = self.get_selected_item() {
+            if item == "../" {
+                return;
+            }
+            let item = item.clone();
+            if !self.selected.remove(&item) {
+                self.selected.insert(item);
+            }
+        }
+    }
+
+    pub fn select_all(&mut self) {
+        for item in &self.filtered_items {
+            if item != "../" {
+                self.selected.insert(item.clone());
+            }
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selected.clear();
+    }
+
+    pub fn has_selection(&self) -> bool {
+        !self.selected.is_empty()
+    }
+
+    pub fn get_selected_paths(&self) -> Vec<PathBuf> {
+        self.selected.iter()
+            .map(|name| PathBuf::from(&self.path).join(name.trim_end_matches('/')))
+            .collect()
+    }
 }
 
 /// Represents clipboard mode for copy/cut operations
@@ -194,6 +234,7 @@ pub struct Context {
     pub confirm_popup_size: bool,
     pub input: String,
     pub copy_path: String,
+    pub copy_paths: Vec<PathBuf>,
     pub clipboard_mode: ClipboardMode,
     pub pending_paste: Option<(PathBuf, PathBuf, bool)>,
     pub status_message: Option<String>,
@@ -204,19 +245,26 @@ pub struct Context {
 
 impl Context {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let initial_path = file_operation::directory_path(".")?;
+        Self::with_config(Config::default())
+    }
+
+    pub fn with_config(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
+        let initial_path = file_operation::directory_path(&config.general.default_path)?;
+        let show_hidden = config.general.show_hidden;
+        let mut panel0 = PanelState::new(initial_path.clone());
+        let mut panel1 = PanelState::new(initial_path);
+        panel0.show_hidden = show_hidden;
+        panel1.show_hidden = show_hidden;
         Ok(Self {
             exit: false,
-            panels: [
-                PanelState::new(initial_path.clone()),
-                PanelState::new(initial_path),
-            ],
+            panels: [panel0, panel1],
             active_panel: 0,
-            show_preview: false,
+            show_preview: config.general.show_preview_on_start,
             ui_state: UiState::Normal,
             confirm_popup_size: false,
             input: String::default(),
             copy_path: String::default(),
+            copy_paths: Vec::new(),
             clipboard_mode: ClipboardMode::Copy,
             pending_paste: None,
             status_message: None,

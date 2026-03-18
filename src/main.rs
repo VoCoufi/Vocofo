@@ -15,6 +15,7 @@ mod render;
 mod event_handler;
 mod messages_enum;
 mod background_op;
+mod config;
 
 use crate::context::Context;
 
@@ -25,8 +26,9 @@ fn main() -> AppResult<()> {
     // Setup terminal
     let mut terminal = setup_terminal()?;
 
-    // Create an application state
-    let mut context = Context::new()?;
+    // Load config and create application state
+    let cfg = config::Config::load();
+    let mut context = Context::with_config(cfg)?;
 
     // Run the main application loop
     let result = run_app(&mut terminal, &mut context);

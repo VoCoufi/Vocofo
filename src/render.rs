@@ -29,7 +29,10 @@ pub fn render_panel(frame: &mut Frame, area: Rect, panel: &mut PanelState, is_ac
         let full_path = std::path::PathBuf::from(&panel.path).join(name.trim_end_matches('/'));
         let details = file_operation::format_item_details(&full_path);
 
-        let name_style = if name.ends_with('/') {
+        let is_selected = panel.selected.contains(name);
+        let name_style = if is_selected {
+            Style::new().yellow().bold()
+        } else if name.ends_with('/') {
             Style::new().blue()
         } else {
             Style::new().green()

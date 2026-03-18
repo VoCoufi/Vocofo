@@ -106,6 +106,7 @@ fn create_keyboard_shortcuts() -> String {
         ("=", "Sync Dir"),
         ("Tab", "Switch Panel"),
         ("Bksp", "Parent Dir"),
+        (".", "Hidden"),
         ("F3", "Preview"),
     ];
 

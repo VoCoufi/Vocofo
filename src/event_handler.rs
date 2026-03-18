@@ -50,18 +50,26 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
         (KeyCode::Char('p'), _) => {
             context.set_ui_state(UiState::CreatePopup);
         }
+        (KeyCode::Char(' '), _) => {
+            context.active_mut().toggle_selection();
+        }
+        (KeyCode::Char('a'), KeyModifiers::CONTROL) => {
+            context.active_mut().select_all();
+            let count = context.active().selected.len();
+            context.set_status_message(&format!("{} items selected", count));
+        }
+        (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+            context.active_mut().clear_selection();
+            context.set_status_message("Selection cleared");
+        }
         (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-            context.set_copy_path();
-            context.clipboard_mode = crate::context::ClipboardMode::Copy;
-            context.set_status_message("Copied to clipboard");
+            handle_copy_or_cut(context, crate::context::ClipboardMode::Copy);
         }
         (KeyCode::Char('v'), KeyModifiers::CONTROL) => {
             handle_paste(context);
         }
         (KeyCode::Char('x'), KeyModifiers::CONTROL) => {
-            context.set_copy_path();
-            context.clipboard_mode = crate::context::ClipboardMode::Cut;
-            context.set_status_message("Cut to clipboard");
+            handle_copy_or_cut(context, crate::context::ClipboardMode::Cut);
         }
         (KeyCode::Char('d'), _) => {
             context.set_ui_state(UiState::ConfirmDelete);
@@ -85,6 +93,13 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
         }
         (KeyCode::Char('/'), _) => {
             context.set_ui_state(UiState::SearchMode);
+        }
+        (KeyCode::Char('.'), _) => {
+            let panel = context.active_mut();
+            panel.show_hidden = !panel.show_hidden;
+            panel.invalidate_directory_cache();
+            let state = if panel.show_hidden { "shown" } else { "hidden" };
+            context.set_status_message(&format!("Hidden files {}", state));
         }
         (KeyCode::F(3), _) => {
             context.show_preview = !context.show_preview;
@@ -283,22 +298,61 @@ pub fn handle_overwrite_popup_event(context: &mut Context, key_event: KeyEvent) 
     Ok(())
 }
 
+fn handle_copy_or_cut(context: &mut Context, mode: crate::context::ClipboardMode) {
+    let label = if mode == crate::context::ClipboardMode::Cut { "Cut" } else { "Copied" };
+
+    if context.active().has_selection() {
+        context.copy_paths = context.active().get_selected_paths();
+        context.copy_path = String::default();
+        context.clipboard_mode = mode;
+        context.set_status_message(&format!("{} {} items to clipboard", label, context.copy_paths.len()));
+    } else {
+        context.set_copy_path();
+        context.copy_paths.clear();
+        context.clipboard_mode = mode;
+        context.set_status_message(&format!("{} to clipboard", label));
+    }
+}
+
 fn handle_paste(context: &mut Context) {
     if context.is_operation_running() {
         context.set_status_message("Operation already in progress");
         return;
     }
+
+    let is_cut = context.clipboard_mode == crate::context::ClipboardMode::Cut;
+
+    // Multi-file paste
+    if !context.copy_paths.is_empty() {
+        let dest_dir = match resolve_paste_dest_dir(context) {
+            Some(d) => d,
+            None => return,
+        };
+        let items: Vec<(std::path::PathBuf, std::path::PathBuf)> = context.copy_paths.iter()
+            .map(|from| {
+                let name = from.file_name().unwrap_or_default();
+                let to = dest_dir.join(name);
+                (from.clone(), to)
+            })
+            .collect();
+        let count = items.len();
+        let action = if is_cut { "Moving" } else { "Copying" };
+        let desc = format!("{} {} items...", action, count);
+        let rx = background_op::spawn_copy_batch(items, desc.clone(), is_cut);
+        context.start_operation(rx, desc);
+        return;
+    }
+
+    // Single file paste
     if context.get_copy_path().is_empty() {
         context.set_status_message("Nothing to paste — copy a file first");
         return;
     }
     match file_operation::resolve_paste_paths(context) {
         Ok((from, to)) => {
-            let is_cut = context.clipboard_mode == crate::context::ClipboardMode::Cut;
             if to.exists() {
-                // Destination exists — ask for confirmation
                 context.pending_paste = Some((from, to, is_cut));
-                context.confirm_popup_size = true; // Default to Yes
+                context.confirm_popup_size = true;
                 context.set_ui_state(UiState::ConfirmOverwrite);
             } else {
                 spawn_paste_operation(context, from, to, is_cut);
@@ -310,9 +364,22 @@ fn handle_paste(context: &mut Context) {
     }
 }
 
+fn resolve_paste_dest_dir(context: &mut Context) -> Option<std::path::PathBuf> {
+    let panel = context.active();
+    let base = std::path::PathBuf::from(&panel.path);
+    if let Some(item) = panel.get_selected_item() {
+        if panel.get_state() != 0 {
+            let full = base.join(item.trim_end_matches('/'));
+            if full.is_dir() {
+                return Some(full);
+            }
+        }
+    }
+    Some(base)
+}
+
 fn execute_pending_paste(context: &mut Context) {
     if let Some((from, to, is_cut)) = context.pending_paste.take() {
-        // Delete existing target before overwriting
         if to.exists() {
             if let Err(e) = file_operation::delete(&to) {
                 context.set_status_message(&format!("Cannot remove existing file: {}", e));
@@ -352,6 +419,18 @@ fn spawn_delete_operation(context: &mut Context) {
     }
 
     let panel = context.active();
+
+    // Batch delete if selection exists
+    if panel.has_selection() {
+        let paths = panel.get_selected_paths();
+        let count = paths.len();
+        let desc = format!("Deleting {} items...", count);
+        let rx = background_op::spawn_delete_batch(paths, desc.clone());
+        context.start_operation(rx, desc);
+        context.active_mut().clear_selection();
+        return;
+    }
+
     let selected = match panel.get_selected_item() {
         Some(item) => item.clone(),
         None => return,
