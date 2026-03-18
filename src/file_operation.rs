@@ -55,27 +55,16 @@ pub type FileResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 ///
 /// ### Examples:
 ///
-/// ```rust
-/// let mut context = Context::new("/some/directory");
+/// ```rust,no_run
+/// use vocofo::context::Context;
+/// use vocofo::file_operation::list_children;
+///
+/// let mut context = Context::new().unwrap();
 /// match list_children(&mut context) {
-///     Ok(list) => {
-///         for item in list {
-///             println!("{}", item.content());
-///         }
-///     },
+///     Ok(list) => println!("Found {} items", list.len()),
 ///     Err(err) => eprintln!("Error listing directory contents: {}", err),
 /// }
 /// ```
-///
-/// This will print the styled directory contents to the console with folders listed
-/// in blue and files in green.
-///
-/// ### Dependencies:
-///
-/// This function relies on the following modules being in scope:
-/// - `std::fs::read_dir` for reading directory entries.
-/// - `std::io::Error` for handling I/O-related errors.
-/// - Types such as `Style` and `ListItem` for styling and rendering directory entries.
 pub fn list_children(context: &mut Context) -> Result<Vec<ListItem<'static>>> {
     let mut list = Vec::new();
     let mut folders = vec!["../".to_string()];
