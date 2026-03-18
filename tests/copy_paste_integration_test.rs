@@ -21,12 +21,12 @@ fn test_copy_paste_file_workflow() {
 
     // Step 1: Navigate to source directory
     let mut context = Context::new().unwrap();
-    context.path = source_dir.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = source_dir.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Step 2: Select the file (should be after "../")
-    let file_idx = context.items.iter().position(|i| i == "test.txt").unwrap();
-    context.state = file_idx;
+    let file_idx = context.panels[0].items.iter().position(|i| i == "test.txt").unwrap();
+    context.panels[0].state = file_idx;
 
     // Step 3: Copy (Ctrl+C simulation)
     context.set_copy_path();
@@ -34,11 +34,11 @@ fn test_copy_paste_file_workflow() {
     assert!(context.copy_path.contains("test.txt"));
 
     // Step 4: Navigate to destination directory
-    context.path = dest_dir.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = dest_dir.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Step 5: Select destination (../ for current directory)
-    context.state = 0;
+    context.panels[0].state = 0;
 
     // Step 6: Paste (Ctrl+V simulation)
     let result = file_operation::copy_file(&mut context);
@@ -71,19 +71,19 @@ fn test_copy_paste_folder_workflow() {
 
     // Step 1: Navigate to source and select folder
     let mut context = Context::new().unwrap();
-    context.path = source_dir.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = source_dir.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let folder_idx = context.items.iter().position(|i| i == "myfolder/").unwrap();
-    context.state = folder_idx;
+    let folder_idx = context.panels[0].items.iter().position(|i| i == "myfolder/").unwrap();
+    context.panels[0].state = folder_idx;
 
     // Step 2: Copy folder
     context.set_copy_path();
 
     // Step 3: Navigate to destination and paste
-    context.path = dest_dir.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
-    context.state = 0;
+    context.panels[0].path = dest_dir.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
+    context.panels[0].state = 0;
 
     let result = file_operation::copy_file(&mut context);
     assert!(result.is_ok(), "Copy folder failed: {:?}", result.err());
@@ -109,17 +109,17 @@ fn test_copy_paste_into_subfolder() {
     fs::create_dir(base.join("subfolder")).unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = base.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Copy file
-    let file_idx = context.items.iter().position(|i| i == "file.txt").unwrap();
-    context.state = file_idx;
+    let file_idx = context.panels[0].items.iter().position(|i| i == "file.txt").unwrap();
+    context.panels[0].state = file_idx;
     context.set_copy_path();
 
     // Navigate to same directory, select subfolder
-    let folder_idx = context.items.iter().position(|i| i == "subfolder/").unwrap();
-    context.state = folder_idx;
+    let folder_idx = context.panels[0].items.iter().position(|i| i == "subfolder/").unwrap();
+    context.panels[0].state = folder_idx;
 
     // Paste into subfolder
     let result = file_operation::copy_file(&mut context);
@@ -138,16 +138,16 @@ fn test_copy_paste_same_directory_fails() {
     fs::write(base.join("file.txt"), "content").unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = base.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Copy file
-    let file_idx = context.items.iter().position(|i| i == "file.txt").unwrap();
-    context.state = file_idx;
+    let file_idx = context.panels[0].items.iter().position(|i| i == "file.txt").unwrap();
+    context.panels[0].state = file_idx;
     context.set_copy_path();
 
     // Try to paste in same location
-    context.state = 0; // Select "../" (current directory)
+    context.panels[0].state = 0; // Select "../" (current directory)
     let result = file_operation::copy_file(&mut context);
 
     // Should fail with "Destination already exists"
@@ -170,7 +170,7 @@ fn test_copy_without_selection() {
 fn test_paste_with_empty_clipboard() {
     let temp_dir = TempDir::new().unwrap();
     let mut context = Context::new().unwrap();
-    context.path = temp_dir.path().to_string_lossy().to_string();
+    context.panels[0].path = temp_dir.path().to_string_lossy().to_string();
 
     // Clipboard is empty
     assert!(context.copy_path.is_empty());
@@ -186,12 +186,12 @@ fn test_copy_parent_directory_does_nothing() {
     let base = temp_dir.path();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = base.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Select "../"
-    context.state = 0;
-    assert_eq!(context.get_selected_item(), Some(&"../".to_string()));
+    context.panels[0].state = 0;
+    assert_eq!(context.panels[0].get_selected_item(), Some(&"../".to_string()));
 
     // Try to copy
     context.set_copy_path();
@@ -213,18 +213,18 @@ fn test_copy_file_with_special_characters() {
     fs::create_dir(&dest).unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = base.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Find and copy the special file
-    let file_idx = context.items.iter().position(|i| i == special_file).unwrap();
-    context.state = file_idx;
+    let file_idx = context.panels[0].items.iter().position(|i| i == special_file).unwrap();
+    context.panels[0].state = file_idx;
     context.set_copy_path();
 
     // Paste to dest
-    context.path = dest.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
-    context.state = 0;
+    context.panels[0].path = dest.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
+    context.panels[0].state = 0;
 
     let result = file_operation::copy_file(&mut context);
     assert!(result.is_ok());
@@ -243,27 +243,27 @@ fn test_clipboard_persists_across_navigation() {
     fs::create_dir(base.join("folder2")).unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = base.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Copy file
-    let file_idx = context.items.iter().position(|i| i == "file.txt").unwrap();
-    context.state = file_idx;
+    let file_idx = context.panels[0].items.iter().position(|i| i == "file.txt").unwrap();
+    context.panels[0].state = file_idx;
     context.set_copy_path();
 
     let clipboard_content = context.copy_path.clone();
     assert!(!clipboard_content.is_empty());
 
     // Navigate to folder1
-    context.path = base.join("folder1").to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = base.join("folder1").to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Clipboard should still have the file
     assert_eq!(context.copy_path, clipboard_content);
 
     // Navigate to folder2
-    context.path = base.join("folder2").to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = base.join("folder2").to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Clipboard should still persist
     assert_eq!(context.copy_path, clipboard_content);
@@ -282,18 +282,18 @@ fn test_overwrite_existing_file_fails() {
     fs::write(dest.join("file.txt"), "existing").unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
+    context.panels[0].path = base.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Copy file
-    let file_idx = context.items.iter().position(|i| i == "file.txt").unwrap();
-    context.state = file_idx;
+    let file_idx = context.panels[0].items.iter().position(|i| i == "file.txt").unwrap();
+    context.panels[0].state = file_idx;
     context.set_copy_path();
 
     // Try to paste to dest (where file already exists)
-    context.path = dest.to_string_lossy().to_string();
-    file_operation::list_children(&mut context).unwrap();
-    context.state = 0;
+    context.panels[0].path = dest.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
+    context.panels[0].state = 0;
 
     let result = file_operation::copy_file(&mut context);
 

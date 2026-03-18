@@ -182,37 +182,37 @@ fn test_copy_directory_into_itself() {
 fn test_list_children_empty_directory() {
     let temp_dir = TempDir::new().unwrap();
     let mut context = Context::new().unwrap();
-    context.path = temp_dir.path().to_string_lossy().to_string();
+    context.panels[0].path = temp_dir.path().to_string_lossy().to_string();
 
-    let result = list_children(&mut context);
+    let result = list_children(&mut context.panels[0]);
     assert!(result.is_ok());
 
     let _items = result.unwrap();
     // Should only have "../" entry
-    assert_eq!(context.items.len(), 1);
-    assert_eq!(context.items[0], "../");
+    assert_eq!(context.panels[0].items.len(), 1);
+    assert_eq!(context.panels[0].items[0], "../");
 }
 
 #[test]
 fn test_list_children_with_files_and_folders() {
     let temp_dir = setup_test_dir();
     let mut context = Context::new().unwrap();
-    context.path = temp_dir.path().to_string_lossy().to_string();
+    context.panels[0].path = temp_dir.path().to_string_lossy().to_string();
 
-    let result = list_children(&mut context);
+    let result = list_children(&mut context.panels[0]);
     assert!(result.is_ok());
 
     // Should have: ../, folder1/, folder2/, file1.txt, file2.txt
-    assert_eq!(context.items.len(), 5);
+    assert_eq!(context.panels[0].items.len(), 5);
 
     // Check that folders come before files and have trailing slash
-    assert!(context.items[0] == "../");
-    assert!(context.items[1].ends_with('/'));
-    assert!(context.items[2].ends_with('/'));
+    assert!(context.panels[0].items[0] == "../");
+    assert!(context.panels[0].items[1].ends_with('/'));
+    assert!(context.panels[0].items[2].ends_with('/'));
 
     // Check files don't have trailing slash
-    assert!(!context.items[3].ends_with('/'));
-    assert!(!context.items[4].ends_with('/'));
+    assert!(!context.panels[0].items[3].ends_with('/'));
+    assert!(!context.panels[0].items[4].ends_with('/'));
 }
 
 #[test]
@@ -227,25 +227,25 @@ fn test_list_children_sorted() {
     fs::create_dir(base.join("archive")).unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
+    context.panels[0].path = base.to_string_lossy().to_string();
 
-    let result = list_children(&mut context);
+    let result = list_children(&mut context.panels[0]);
     assert!(result.is_ok());
 
     // Items should be sorted: ../, folders (sorted), files (sorted)
-    assert_eq!(context.items[0], "../");
-    assert_eq!(context.items[1], "archive/");
-    assert_eq!(context.items[2], "zoo/");
-    assert_eq!(context.items[3], "apple.txt");
-    assert_eq!(context.items[4], "zebra.txt");
+    assert_eq!(context.panels[0].items[0], "../");
+    assert_eq!(context.panels[0].items[1], "archive/");
+    assert_eq!(context.panels[0].items[2], "zoo/");
+    assert_eq!(context.panels[0].items[3], "apple.txt");
+    assert_eq!(context.panels[0].items[4], "zebra.txt");
 }
 
 #[test]
 fn test_list_children_invalid_path() {
     let mut context = Context::new().unwrap();
-    context.path = "/nonexistent/path/that/does/not/exist".to_string();
+    context.panels[0].path = "/nonexistent/path/that/does/not/exist".to_string();
 
-    let result = list_children(&mut context);
+    let result = list_children(&mut context.panels[0]);
     assert!(result.is_err());
 }
 
@@ -260,15 +260,15 @@ fn test_list_children_special_characters() {
     fs::create_dir(base.join("folder (copy)")).unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
+    context.panels[0].path = base.to_string_lossy().to_string();
 
-    let result = list_children(&mut context);
+    let result = list_children(&mut context.panels[0]);
     assert!(result.is_ok());
 
     // All items should be listed correctly
-    assert!(context.items.iter().any(|i| i == "file with spaces.txt"));
-    assert!(context.items.iter().any(|i| i == "file-with-dashes.txt"));
-    assert!(context.items.iter().any(|i| i == "folder (copy)/"));
+    assert!(context.panels[0].items.iter().any(|i| i == "file with spaces.txt"));
+    assert!(context.panels[0].items.iter().any(|i| i == "file-with-dashes.txt"));
+    assert!(context.panels[0].items.iter().any(|i| i == "folder (copy)/"));
 }
 
 // ============================================================================

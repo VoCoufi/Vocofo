@@ -13,10 +13,10 @@ fn create_test_context() -> (Context, TempDir) {
     fs::create_dir(base.join("folder1")).unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
+    context.panels[0].path = base.to_string_lossy().to_string();
 
     // Populate items list
-    vocofo::file_operation::list_children(&mut context).unwrap();
+    vocofo::file_operation::list_children(&mut context.panels[0]).unwrap();
 
     (context, temp_dir)
 }
@@ -28,9 +28,9 @@ fn test_context_new() {
 
     let context = context.unwrap();
     assert_eq!(context.exit, false);
-    assert!(!context.path.is_empty());
-    assert_eq!(context.items.len(), 0);
-    assert_eq!(context.state, 0);
+    assert!(!context.panels[0].path.is_empty());
+    assert_eq!(context.panels[0].items.len(), 0);
+    assert_eq!(context.panels[0].state, 0);
     assert_eq!(context.ui_state, UiState::Normal);
     assert!(context.copy_path.is_empty());
 }
@@ -54,31 +54,31 @@ fn test_set_exit() {
 #[test]
 fn test_increment_state() {
     let mut context = Context::new().unwrap();
-    assert_eq!(context.state, 0);
+    assert_eq!(context.panels[0].state, 0);
 
-    context.increment_state();
-    assert_eq!(context.state, 1);
+    context.panels[0].increment_state();
+    assert_eq!(context.panels[0].state, 1);
 
-    context.increment_state();
-    assert_eq!(context.state, 2);
+    context.panels[0].increment_state();
+    assert_eq!(context.panels[0].state, 2);
 }
 
 #[test]
 fn test_decrease_state() {
     let mut context = Context::new().unwrap();
-    context.state = 5;
+    context.panels[0].state = 5;
 
-    context.decrease_state();
-    assert_eq!(context.state, 4);
+    context.panels[0].decrease_state();
+    assert_eq!(context.panels[0].state, 4);
 
-    context.decrease_state();
-    assert_eq!(context.state, 3);
+    context.panels[0].decrease_state();
+    assert_eq!(context.panels[0].state, 3);
 }
 
 #[test]
 fn test_get_selected_item_empty_list() {
     let context = Context::new().unwrap();
-    assert!(context.get_selected_item().is_none());
+    assert!(context.panels[0].get_selected_item().is_none());
 }
 
 #[test]
@@ -86,11 +86,11 @@ fn test_get_selected_item_valid() {
     let (mut context, _temp) = create_test_context();
 
     // State 0 should be "../"
-    assert_eq!(context.get_selected_item(), Some(&"../".to_string()));
+    assert_eq!(context.panels[0].get_selected_item(), Some(&"../".to_string()));
 
     // Move to next item
-    context.increment_state();
-    assert!(context.get_selected_item().is_some());
+    context.panels[0].increment_state();
+    assert!(context.panels[0].get_selected_item().is_some());
 }
 
 #[test]
@@ -98,8 +98,8 @@ fn test_get_selected_item_out_of_bounds() {
     let (mut context, _temp) = create_test_context();
 
     // Set state beyond items length
-    context.state = 999;
-    assert!(context.get_selected_item().is_none());
+    context.panels[0].state = 999;
+    assert!(context.panels[0].get_selected_item().is_none());
 }
 
 #[test]
@@ -140,8 +140,8 @@ fn test_set_copy_path_valid_item() {
     let (mut context, temp) = create_test_context();
 
     // Select file1.txt (should be at index after folders)
-    let file_idx = context.items.iter().position(|i| i == "file1.txt").unwrap();
-    context.state = file_idx;
+    let file_idx = context.panels[0].items.iter().position(|i| i == "file1.txt").unwrap();
+    context.panels[0].state = file_idx;
 
     context.set_copy_path();
 
@@ -154,8 +154,8 @@ fn test_set_copy_path_with_folder() {
     let (mut context, temp) = create_test_context();
 
     // Select folder1/
-    let folder_idx = context.items.iter().position(|i| i == "folder1/").unwrap();
-    context.state = folder_idx;
+    let folder_idx = context.panels[0].items.iter().position(|i| i == "folder1/").unwrap();
+    context.panels[0].state = folder_idx;
 
     context.set_copy_path();
 
@@ -169,8 +169,8 @@ fn test_set_copy_path_parent_directory() {
     let (mut context, _temp) = create_test_context();
 
     // Select "../" (should be at index 0)
-    context.state = 0;
-    assert_eq!(context.get_selected_item(), Some(&"../".to_string()));
+    context.panels[0].state = 0;
+    assert_eq!(context.panels[0].get_selected_item(), Some(&"../".to_string()));
 
     let before = context.copy_path.clone();
     context.set_copy_path();
@@ -203,9 +203,9 @@ fn test_get_copy_path() {
 #[test]
 fn test_get_state() {
     let mut context = Context::new().unwrap();
-    context.state = 42;
+    context.panels[0].state = 42;
 
-    assert_eq!(context.get_state(), 42);
+    assert_eq!(context.panels[0].get_state(), 42);
 }
 
 #[test]
@@ -228,10 +228,10 @@ fn test_get_metadata_selected_item_file() {
     let (mut context, _temp) = create_test_context();
 
     // Select a file
-    let file_idx = context.items.iter().position(|i| i == "file1.txt").unwrap();
-    context.state = file_idx;
+    let file_idx = context.panels[0].items.iter().position(|i| i == "file1.txt").unwrap();
+    context.panels[0].state = file_idx;
 
-    let metadata = context.get_metadata_selected_item();
+    let metadata = context.panels[0].get_metadata_selected_item();
     assert!(metadata.is_some());
 
     let meta = metadata.unwrap();
@@ -244,10 +244,10 @@ fn test_get_metadata_selected_item_folder() {
     let (mut context, _temp) = create_test_context();
 
     // Select folder1/
-    let folder_idx = context.items.iter().position(|i| i == "folder1/").unwrap();
-    context.state = folder_idx;
+    let folder_idx = context.panels[0].items.iter().position(|i| i == "folder1/").unwrap();
+    context.panels[0].state = folder_idx;
 
-    let metadata = context.get_metadata_selected_item();
+    let metadata = context.panels[0].get_metadata_selected_item();
     assert!(metadata.is_some());
 
     let meta = metadata.unwrap();
@@ -260,23 +260,23 @@ fn test_get_metadata_selected_item_no_selection() {
     let context = Context::new().unwrap();
     // No items in list
 
-    let metadata = context.get_metadata_selected_item();
+    let metadata = context.panels[0].get_metadata_selected_item();
     assert!(metadata.is_none());
 }
 
 #[test]
 fn test_state_navigation_boundaries() {
     let (mut context, _temp) = create_test_context();
-    let max_state = context.items.len() - 1;
+    let max_state = context.panels[0].items.len() - 1;
 
     // Test upper boundary
-    context.state = max_state;
-    context.increment_state();
+    context.panels[0].state = max_state;
+    context.panels[0].increment_state();
     // State should not exceed items length (handled by event handler)
 
     // Test lower boundary
-    context.state = 0;
-    context.decrease_state();
+    context.panels[0].state = 0;
+    context.panels[0].decrease_state();
     // Would underflow, but event handler prevents this
 }
 
@@ -304,24 +304,24 @@ fn test_multiple_ui_state_changes() {
 #[test]
 fn test_context_new_has_no_preview() {
     let context = Context::new().unwrap();
-    assert!(context.preview_content.is_none());
-    assert!(context.preview_last_item.is_none());
+    assert!(context.panels[0].preview_content.is_none());
+    assert!(context.panels[0].preview_last_item.is_none());
 }
 
 #[test]
 fn test_get_preview_content_empty() {
     let context = Context::new().unwrap();
-    assert!(context.get_preview_content().is_none());
+    assert!(context.panels[0].get_preview_content().is_none());
 }
 
 #[test]
 fn test_update_preview_with_no_selection() {
     let mut context = Context::new().unwrap();
-    context.update_preview();
+    context.panels[0].update_preview();
 
     // Should remain None when nothing is selected
-    assert!(context.get_preview_content().is_none());
-    assert!(context.preview_last_item.is_none());
+    assert!(context.panels[0].get_preview_content().is_none());
+    assert!(context.panels[0].preview_last_item.is_none());
 }
 
 #[test]
@@ -333,22 +333,22 @@ fn test_update_preview_with_file() {
     fs::write(base.join("test.txt"), "Hello, World!").unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
+    context.panels[0].path = base.to_string_lossy().to_string();
 
     // Populate items list
-    vocofo::file_operation::list_children(&mut context).unwrap();
+    vocofo::file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Move to first real item (not "../")
-    context.state = 1;
+    context.panels[0].state = 1;
 
     // Update preview
-    context.update_preview();
+    context.panels[0].update_preview();
 
     // Should have preview content
-    assert!(context.get_preview_content().is_some());
-    assert!(context.preview_last_item.is_some());
+    assert!(context.panels[0].get_preview_content().is_some());
+    assert!(context.panels[0].preview_last_item.is_some());
 
-    let preview = context.get_preview_content().unwrap();
+    let preview = context.panels[0].get_preview_content().unwrap();
     assert!(preview.contains("Type: File"));
     assert!(preview.contains("Hello, World!"));
 }
@@ -364,20 +364,20 @@ fn test_update_preview_with_directory() {
     fs::write(base.join("test_folder/file2.txt"), "content2").unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
+    context.panels[0].path = base.to_string_lossy().to_string();
 
     // Populate items list
-    vocofo::file_operation::list_children(&mut context).unwrap();
+    vocofo::file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Move to the folder (should be at index 1 after "../")
-    context.state = 1;
+    context.panels[0].state = 1;
 
     // Update preview
-    context.update_preview();
+    context.panels[0].update_preview();
 
     // Should have preview content
-    assert!(context.get_preview_content().is_some());
-    let preview = context.get_preview_content().unwrap();
+    assert!(context.panels[0].get_preview_content().is_some());
+    let preview = context.panels[0].get_preview_content().unwrap();
 
     assert!(preview.contains("Type: Directory"));
     assert!(preview.contains("Contents"));
@@ -392,23 +392,23 @@ fn test_update_preview_caching() {
     fs::write(base.join("test.txt"), "Hello, World!").unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
+    context.panels[0].path = base.to_string_lossy().to_string();
 
     // Populate items list
-    vocofo::file_operation::list_children(&mut context).unwrap();
+    vocofo::file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Move to first real item
-    context.state = 1;
+    context.panels[0].state = 1;
 
     // First update
-    context.update_preview();
-    let first_preview = context.get_preview_content().unwrap().clone();
-    let first_last_item = context.preview_last_item.clone();
+    context.panels[0].update_preview();
+    let first_preview = context.panels[0].get_preview_content().unwrap().clone();
+    let first_last_item = context.panels[0].preview_last_item.clone();
 
     // Second update without changing selection
-    context.update_preview();
-    let second_preview = context.get_preview_content().unwrap().clone();
-    let second_last_item = context.preview_last_item.clone();
+    context.panels[0].update_preview();
+    let second_preview = context.panels[0].get_preview_content().unwrap().clone();
+    let second_last_item = context.panels[0].preview_last_item.clone();
 
     // Should be the same (cached)
     assert_eq!(first_preview, second_preview);
@@ -425,20 +425,20 @@ fn test_update_preview_invalidates_cache_on_selection_change() {
     fs::write(base.join("file2.txt"), "Content 2").unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
+    context.panels[0].path = base.to_string_lossy().to_string();
 
     // Populate items list
-    vocofo::file_operation::list_children(&mut context).unwrap();
+    vocofo::file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Select first file
-    context.state = 1;
-    context.update_preview();
-    let first_preview = context.get_preview_content().unwrap().clone();
+    context.panels[0].state = 1;
+    context.panels[0].update_preview();
+    let first_preview = context.panels[0].get_preview_content().unwrap().clone();
 
     // Change selection to second file
-    context.state = 2;
-    context.update_preview();
-    let second_preview = context.get_preview_content().unwrap().clone();
+    context.panels[0].state = 2;
+    context.panels[0].update_preview();
+    let second_preview = context.panels[0].get_preview_content().unwrap().clone();
 
     // Previews should be different
     assert_ne!(first_preview, second_preview);
@@ -454,18 +454,18 @@ fn test_update_preview_for_parent_directory() {
     fs::write(base.join("file2.txt"), "content2").unwrap();
 
     let mut context = Context::new().unwrap();
-    context.path = base.to_string_lossy().to_string();
+    context.panels[0].path = base.to_string_lossy().to_string();
 
     // Populate items list
-    vocofo::file_operation::list_children(&mut context).unwrap();
+    vocofo::file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Select "../" (index 0)
-    context.state = 0;
-    context.update_preview();
+    context.panels[0].state = 0;
+    context.panels[0].update_preview();
 
     // Should preview the current directory
-    assert!(context.get_preview_content().is_some());
-    let preview = context.get_preview_content().unwrap();
+    assert!(context.panels[0].get_preview_content().is_some());
+    let preview = context.panels[0].get_preview_content().unwrap();
 
     // Should show current directory contents
     assert!(preview.contains("Type: Directory"));

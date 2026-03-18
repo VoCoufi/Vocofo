@@ -1,10 +1,10 @@
+use std::rc::Rc;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     prelude::*,
     style::{Color, Modifier, Style},
     widgets::*,
 };
-use std::rc::Rc;
 
 use crate::context::{Context, UiState};
 use crate::messages_enum::MessageEnum;
@@ -15,20 +15,15 @@ type UiResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 /// Main UI rendering function
 pub fn ui(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
-    // Create the main application layout
     let main_layout = create_main_layout(frame.area());
 
-    // Render the application components
     render_title_bar(frame, &main_layout[0]);
     render_status_bar(frame, &main_layout[2], context);
 
-    // Create the file browser layout
     let browser_layout = create_browser_layout(&main_layout[1]);
 
-    // Render the file browser components
     render_directory_panels(frame, &browser_layout, context)?;
 
-    // Render any active popups on top
     render_popups(frame, context)?;
 
     Ok(())
@@ -51,8 +46,8 @@ fn create_browser_layout(area: &Rect) -> Rc<[Rect]> {
     Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(50),  // Left panel
-            Constraint::Percentage(50),  // Right panel
+            Constraint::Percentage(50),
+            Constraint::Percentage(50),
         ])
         .split(*area)
 }
@@ -91,9 +86,12 @@ fn create_keyboard_shortcuts() -> String {
         ("D", "Delete"),
         ("C", "Copy"),
         ("V", "Paste"),
+        ("X", "Cut"),
         ("R", "Rename"),
         ("P", "New Folder"),
         ("Tab", "Switch Panel"),
+        ("Bksp", "Parent Dir"),
+        ("F3", "Preview"),
     ];
 
     shortcuts.iter()
@@ -104,31 +102,37 @@ fn create_keyboard_shortcuts() -> String {
 
 /// Renders the directory browser panels
 fn render_directory_panels(frame: &mut Frame, layout: &[Rect], context: &mut Context) -> UiResult<()> {
-    // Render the left directory panel
-    render::render_left_directory(frame, Rc::new(layout.to_vec()), context)?;
+    if context.show_preview {
+        // Preview mode: active panel + preview on the opposite side
+        let active_idx = context.active_panel;
+        let (panel_area, preview_area) = if active_idx == 0 {
+            (layout[0], layout[1])
+        } else {
+            (layout[1], layout[0])
+        };
 
-    // Render the preview panel for the selected item
-    render_preview_panel(frame, &layout[1], context)?;
-
-    // Render the right directory panel if needed
-    // render::render_right_directory(frame, Rc::new(layout.to_vec()), context)?;
+        render::render_panel(frame, panel_area, context.active_mut(), true)?;
+        render_preview_panel(frame, &preview_area, context)?;
+    } else {
+        // Dual panel mode: both panels visible
+        let active = context.active_panel;
+        render::render_panel(frame, layout[0], &mut context.panels[0], active == 0)?;
+        render::render_panel(frame, layout[1], &mut context.panels[1], active == 1)?;
+    }
 
     Ok(())
 }
 
 /// Renders a preview panel for the selected item
 fn render_preview_panel(frame: &mut Frame, area: &Rect, context: &mut Context) -> UiResult<()> {
-    // Get the selected item name or show "Nothing selected"
-    let selected_item = context.get_selected_item()
+    let selected_item = context.active().get_selected_item()
         .map(|s| s.as_str())
         .unwrap_or("[Nothing selected]");
 
-    // Get the preview content
-    let preview_content = context.get_preview_content()
+    let preview_content = context.active().get_preview_content()
         .map(|s| s.as_str())
         .unwrap_or("No preview available");
 
-    // Create inner area for content (inside the border)
     let inner_area = Rect {
         x: area.x + 1,
         y: area.y + 1,
@@ -136,20 +140,17 @@ fn render_preview_panel(frame: &mut Frame, area: &Rect, context: &mut Context) -
         height: area.height.saturating_sub(2),
     };
 
-    // Create a styled block for the preview
     let preview_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Blue))
         .title(format!(" Preview: {} ", selected_item))
         .title_alignment(Alignment::Center);
 
-    // Create paragraph with the preview content
     let preview_paragraph = Paragraph::new(preview_content)
         .style(Style::default().fg(Color::White))
         .wrap(Wrap { trim: false })
         .scroll((0, 0));
 
-    // Render the preview block and content
     frame.render_widget(preview_block, *area);
     frame.render_widget(preview_paragraph, inner_area);
 
@@ -157,36 +158,6 @@ fn render_preview_panel(frame: &mut Frame, area: &Rect, context: &mut Context) -
 }
 
 /// Renders the appropriate popup UI based on the current UI state.
-///
-/// # Parameters
-/// - `frame`: A mutable reference to the current rendering [`Frame`].
-/// - `context`: A mutable reference to the [`Context`] that contains the application state and information about the UI.
-///
-/// # Returns
-/// Returns [`UiResult<()>`], which:
-/// - Is `Ok(())` if the operation completes successfully.
-/// - Contains an error if the UI state cannot be retrieved or if rendering a popup fails.
-///
-/// # Behavior
-/// The function checks the current UI state from the provided `context`:
-/// - If the state is [`UiState::ConfirmDelete`], it renders the delete confirmation popup by calling [`render::popup_confirm_delete`].
-/// - If the state is [`UiState::CreatePopup`], it renders the name creation popup by calling [`render::popup_name_creation`].
-/// - If the state is [`UiState::Normal`], no popup is rendered.
-///
-/// # Errors
-/// - Returns an error if the UI state is unavailable (`"UI state not available"`).
-/// - Propagates errors that might occur while rendering specific popups (`popup_confirm_delete` or `popup_name_creation`).
-///
-/// # Examples
-/// ```rust
-/// let mut frame = Frame::new();
-/// let mut context = Context::new();
-///
-/// // Assuming the UI state is set to UiState::ConfirmDelete
-/// context.set_ui_state(UiState::ConfirmDelete);
-///
-/// render_popups(&mut frame, &mut context)?;
-/// ```
 fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
     match context.get_ui_state().ok_or("UI state not available")? {
         UiState::ConfirmDelete => render::popup_confirm_delete(frame, context)?,
@@ -194,6 +165,6 @@ fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
         UiState::RenamePopup => render::popup_rename(frame, context)?,
         UiState::Normal => ()
     }
-    
+
     Ok(())
 }
