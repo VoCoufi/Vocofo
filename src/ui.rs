@@ -126,13 +126,15 @@ fn render_directory_panels(frame: &mut Frame, layout: &[Rect], context: &mut Con
             (layout[1], layout[0])
         };
 
-        render::render_panel(frame, panel_area, context.active_mut(), true)?;
+        let is_searching = context.ui_state == UiState::SearchMode;
+        render::render_panel(frame, panel_area, context.active_mut(), true, is_searching)?;
         render_preview_panel(frame, &preview_area, context)?;
     } else {
         // Dual panel mode: both panels visible
         let active = context.active_panel;
-        render::render_panel(frame, layout[0], &mut context.panels[0], active == 0)?;
-        render::render_panel(frame, layout[1], &mut context.panels[1], active == 1)?;
+        let is_searching = context.ui_state == UiState::SearchMode;
+        render::render_panel(frame, layout[0], &mut context.panels[0], active == 0, is_searching && active == 0)?;
+        render::render_panel(frame, layout[1], &mut context.panels[1], active == 1, is_searching && active == 1)?;
     }
 
     Ok(())

@@ -13,7 +13,7 @@ use crate::context::Context;
 type RenderResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 /// Renders a directory panel, refreshing the item list only when dirty
-pub fn render_panel(frame: &mut Frame, area: Rect, panel: &mut PanelState, is_active: bool) -> RenderResult<()> {
+pub fn render_panel(frame: &mut Frame, area: Rect, panel: &mut PanelState, is_active: bool, is_searching: bool) -> RenderResult<()> {
     if panel.items_dirty {
         file_operation::list_children(panel)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
@@ -48,10 +48,12 @@ pub fn render_panel(frame: &mut Frame, area: Rect, panel: &mut PanelState, is_ac
         ListItem::new(line)
     }).collect();
 
-    let title = if panel.filter.is_empty() {
-        panel.path.clone()
-    } else {
+    let title = if is_searching {
+        format!("{} [/: {}]", panel.path, panel.filter)
+    } else if !panel.filter.is_empty() {
         format!("{} [filter: {}]", panel.path, panel.filter)
+    } else {
+        panel.path.clone()
     };
 
     let list = create_directory_list(&title, items, is_active);
