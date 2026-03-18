@@ -1,7 +1,9 @@
+use crate::background_op::FileOpResult;
 use crate::file_operation;
 use std::fs;
 use std::fs::Metadata;
 use std::path::PathBuf;
+use std::sync::mpsc;
 
 /// State for a single directory panel
 pub struct PanelState {
@@ -167,6 +169,9 @@ pub struct Context {
     pub copy_path: String,
     pub clipboard_mode: ClipboardMode,
     pub status_message: Option<String>,
+    pub active_operation: Option<mpsc::Receiver<FileOpResult>>,
+    pub operation_description: Option<String>,
+    pub spinner_tick: u8,
 }
 
 impl Context {
@@ -186,6 +191,9 @@ impl Context {
             copy_path: String::default(),
             clipboard_mode: ClipboardMode::Copy,
             status_message: None,
+            active_operation: None,
+            operation_description: None,
+            spinner_tick: 0,
         })
     }
 
@@ -271,5 +279,35 @@ impl Context {
 
     pub fn clear_status_message(&mut self) {
         self.status_message = None;
+    }
+
+    pub fn is_operation_running(&self) -> bool {
+        self.active_operation.is_some()
+    }
+
+    pub fn start_operation(&mut self, receiver: mpsc::Receiver<FileOpResult>, description: String) {
+        self.active_operation = Some(receiver);
+        self.operation_description = Some(description);
+    }
+
+    pub fn check_operation(&mut self) -> Option<FileOpResult> {
+        let receiver = self.active_operation.as_ref()?;
+        match receiver.try_recv() {
+            Ok(result) => {
+                self.active_operation = None;
+                self.operation_description = None;
+                Some(result)
+            }
+            Err(mpsc::TryRecvError::Empty) => None,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                let desc = self.operation_description.take().unwrap_or_default();
+                self.active_operation = None;
+                Some(FileOpResult {
+                    description: desc,
+                    result: Err("Operation thread crashed".to_string()),
+                    clear_clipboard: false,
+                })
+            }
+        }
     }
 }

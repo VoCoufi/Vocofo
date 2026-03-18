@@ -100,23 +100,6 @@ pub fn directory_path(folder_path: impl AsRef<Path>) -> FileResult<String> {
         .map(|s| s.to_string())
 }
 
-/// Handle the delete operation for the currently selected item
-pub fn handle_delete_operation(context: &mut Context) -> FileResult<()> {
-    let panel = context.active_mut();
-    let selected_item = panel.get_selected_item()
-        .ok_or_else(|| Box::<dyn std::error::Error>::from("No item selected"))?;
-
-    let path = PathBuf::from(&panel.path).join(selected_item);
-
-    delete(&path)?;
-
-    if panel.state > 0 {
-        panel.decrease_state();
-    }
-
-    Ok(())
-}
-
 /// Handle creating a new directory from the user input
 pub fn handle_create_directory(context: &mut Context) -> FileResult<()> {
     let input = context.get_input()
@@ -241,42 +224,14 @@ pub fn copy_dir(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> FileResult<()> 
     Ok(())
 }
 
-/// Copy a file or directory to the active panel's directory
-pub fn copy_file(context: &mut Context) -> FileResult<()> {
+/// Resolve source and destination paths for a paste operation
+pub fn resolve_paste_paths(context: &mut Context) -> FileResult<(PathBuf, PathBuf)> {
     let from = PathBuf::from(context.get_copy_path());
     let dest_dir = resolve_path_from(context)?;
-    let item_name = from.file_name().ok_or_else(|| Error::new(io::ErrorKind::InvalidData, "Invalid source path"))?;
+    let item_name = from.file_name()
+        .ok_or_else(|| Box::<dyn std::error::Error>::from("Invalid source path"))?;
     let to = dest_dir.join(item_name);
-
-    if from == to {
-        return Err(Box::new(Error::new(
-            io::ErrorKind::AlreadyExists,
-            "Destination already exists",
-        )));
-    }
-
-    let meta = fs::metadata(&from)?;
-    if meta.is_dir() {
-        let to = dest_dir.join(item_name);
-        copy_dir(from, to)?;
-        return Ok(());
-    }
-
-    let to = dest_dir.join(item_name);
-
-    if let Some(parent) = to.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    if to.exists() {
-        return Err(Box::new(Error::new(
-            io::ErrorKind::AlreadyExists,
-            "Destination already exists",
-        )));
-    }
-
-    fs::copy(from, to)?;
-    Ok(())
+    Ok((from, to))
 }
 
 fn resolve_path_from(context: &mut Context) -> FileResult<PathBuf> {

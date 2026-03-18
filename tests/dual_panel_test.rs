@@ -1,5 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
+use vocofo::background_op;
 use vocofo::context::{ClipboardMode, Context};
 use vocofo::file_operation;
 
@@ -207,9 +208,11 @@ fn test_cross_panel_copy_paste() {
     context.toggle_active_panel();
     assert_eq!(context.active_panel, 1);
 
-    // Paste
-    let result = file_operation::copy_file(&mut context);
-    assert!(result.is_ok());
+    // Paste via background op
+    let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
+    let rx = background_op::spawn_copy(from, to, "test".to_string());
+    let result = rx.recv().unwrap();
+    assert!(result.result.is_ok());
 
     // File should exist in right panel's directory
     assert!(right.path().join("left_file.txt").exists());
@@ -230,12 +233,11 @@ fn test_cross_panel_cut_move() {
     // Switch to panel 1
     context.toggle_active_panel();
 
-    // Paste (copy phase)
-    file_operation::copy_file(&mut context).unwrap();
-
-    // Delete source (simulating event_handler cut logic)
-    let source = std::path::PathBuf::from(context.get_copy_path().clone());
-    file_operation::delete(&source).unwrap();
+    // Move via background op (copy + delete)
+    let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
+    let rx = background_op::spawn_move(from, to, "test".to_string());
+    let result = rx.recv().unwrap();
+    assert!(result.result.is_ok());
 
     // File should exist in right, not in left
     assert!(right.path().join("left_file.txt").exists());

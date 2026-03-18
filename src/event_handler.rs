@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use crate::background_op;
 use crate::context::{Context, UiState};
 use crate::file_operation;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -49,24 +49,30 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
             context.set_status_message("Copied to clipboard");
         }
         (KeyCode::Char('v'), KeyModifiers::CONTROL) => {
+            if context.is_operation_running() {
+                context.set_status_message("Operation already in progress");
+                return Ok(());
+            }
             if context.get_copy_path().is_empty() {
                 context.set_status_message("Nothing to paste — copy a file first");
                 return Ok(());
             }
-            match file_operation::copy_file(context) {
-                Ok(_) => {
-                    if context.clipboard_mode == crate::context::ClipboardMode::Cut {
-                        let source = PathBuf::from(context.get_copy_path().clone());
-                        if let Err(e) = file_operation::delete(&source) {
-                            context.set_status_message(&format!("Copied but failed to remove source: {}", e));
-                        } else {
-                            context.copy_path = String::default();
-                            context.set_status_message("Moved successfully");
-                        }
+            match file_operation::resolve_paste_paths(context) {
+                Ok((from, to)) => {
+                    let name = from.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "item".to_string());
+                    let is_cut = context.clipboard_mode == crate::context::ClipboardMode::Cut;
+                    let (desc, rx) = if is_cut {
+                        let desc = format!("Moving {}...", name);
+                        let rx = background_op::spawn_move(from, to, desc.clone());
+                        (desc, rx)
                     } else {
-                        context.set_status_message("Pasted successfully");
-                    }
-                    context.invalidate_all_caches();
+                        let desc = format!("Copying {}...", name);
+                        let rx = background_op::spawn_copy(from, to, desc.clone());
+                        (desc, rx)
+                    };
+                    context.start_operation(rx, desc);
                 }
                 Err(e) => {
                     context.set_status_message(&format!("Paste failed: {}", e));
@@ -175,14 +181,7 @@ pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) ->
         KeyCode::Char('y') => {
             context.set_ui_state(UiState::Normal);
             context.set_confirm_button_selected();
-
-            match file_operation::handle_delete_operation(context) {
-                Ok(_) => {
-                    context.active_mut().invalidate_directory_cache();
-                    context.set_status_message("Deleted successfully");
-                }
-                Err(e) => context.set_status_message(&format!("Delete failed: {}", e)),
-            }
+            spawn_delete_operation(context);
         }
         KeyCode::Char('n') | KeyCode::Esc => {
             context.set_ui_state(UiState::Normal);
@@ -201,17 +200,29 @@ pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) ->
             context.set_ui_state(UiState::Normal);
 
             if context.get_confirm_button_selected().unwrap_or(false) {
-                match file_operation::handle_delete_operation(context) {
-                    Ok(_) => {
-                        context.active_mut().invalidate_directory_cache();
-                        context.set_status_message("Deleted successfully");
-                    }
-                    Err(e) => context.set_status_message(&format!("Delete failed: {}", e)),
-                }
+                spawn_delete_operation(context);
                 context.set_confirm_button_selected()
             }
         }
         _ => {}
     }
     Ok(())
+}
+
+fn spawn_delete_operation(context: &mut Context) {
+    if context.is_operation_running() {
+        context.set_status_message("Operation already in progress");
+        return;
+    }
+
+    let panel = context.active();
+    let selected = match panel.get_selected_item() {
+        Some(item) => item.clone(),
+        None => return,
+    };
+
+    let path = std::path::PathBuf::from(&panel.path).join(&selected);
+    let desc = format!("Deleting {}...", selected);
+    let rx = background_op::spawn_delete(path, desc.clone());
+    context.start_operation(rx, desc);
 }

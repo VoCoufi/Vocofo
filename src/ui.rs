@@ -63,9 +63,15 @@ fn render_title_bar(frame: &mut Frame, area: &Rect) {
     frame.render_widget(title_block, *area);
 }
 
-/// Renders the status bar with either a status message or keyboard shortcuts
+/// Renders the status bar with spinner, status message, or keyboard shortcuts
 fn render_status_bar(frame: &mut Frame, area: &Rect, context: &Context) {
-    let (text, style) = if let Some(message) = context.get_status_message() {
+    const SPINNER_FRAMES: &[char] = &['|', '/', '-', '\\'];
+
+    let (text, style) = if context.is_operation_running() {
+        let spinner = SPINNER_FRAMES[context.spinner_tick as usize % SPINNER_FRAMES.len()];
+        let desc = context.operation_description.as_deref().unwrap_or("Working...");
+        (format!("{} {}", spinner, desc), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+    } else if let Some(message) = context.get_status_message() {
         (message.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
     } else {
         (create_keyboard_shortcuts(), Style::default().fg(Color::White))

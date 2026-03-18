@@ -14,6 +14,7 @@ mod context;
 mod render;
 mod event_handler;
 mod messages_enum;
+mod background_op;
 
 use crate::context::Context;
 
@@ -123,6 +124,25 @@ fn run_app(
         if let Some(e) = render_error {
             return Err(e);
         }
+
+        // Check for completed background operations
+        if let Some(result) = context.check_operation() {
+            match result.result {
+                Ok(()) => {
+                    context.invalidate_all_caches();
+                    context.set_status_message(&format!("{} done", result.description.trim_end_matches("...")));
+                    if result.clear_clipboard {
+                        context.copy_path = String::default();
+                    }
+                }
+                Err(e) => {
+                    context.set_status_message(&format!("Failed: {}", e));
+                }
+            }
+        }
+
+        // Advance spinner for progress indicator
+        context.spinner_tick = context.spinner_tick.wrapping_add(1);
 
         // Handle events and break the loop if exit is requested
         if handle_events(context, POLL_TIMEOUT)? {
