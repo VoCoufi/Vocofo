@@ -8,6 +8,7 @@ use crossterm::{
 };
 use ratatui::prelude::*;
 
+mod backend;
 mod file_operation;
 mod ui;
 mod context;
@@ -16,6 +17,7 @@ mod event_handler;
 mod messages_enum;
 mod background_op;
 mod config;
+mod local_backend;
 
 use crate::context::Context;
 
