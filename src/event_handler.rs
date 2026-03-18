@@ -75,6 +75,14 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
                 }
             }
         }
+        (KeyCode::Char('='), _) => {
+            let path = context.active().path.clone();
+            let other = 1 - context.active_panel;
+            context.panels[other].path = path;
+            context.panels[other].invalidate_directory_cache();
+            context.panels[other].clear_filter();
+            context.set_status_message("Panels synced");
+        }
         (KeyCode::Char('/'), _) => {
             context.set_ui_state(UiState::SearchMode);
         }

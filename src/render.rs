@@ -19,13 +19,33 @@ pub fn render_panel(frame: &mut Frame, area: Rect, panel: &mut PanelState, is_ac
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
     }
 
-    // Build styled ListItems from filtered items
+    // Build styled ListItems with file details
+    let panel_width = area.width.saturating_sub(4) as usize; // account for borders + highlight
     let items: Vec<ListItem> = panel.filtered_items.iter().map(|name| {
-        if name.ends_with('/') {
-            ListItem::new(name.clone()).style(Style::new().blue())
-        } else {
-            ListItem::new(name.clone()).style(Style::new().green())
+        if name == "../" {
+            return ListItem::new(name.clone()).style(Style::new().blue());
         }
+
+        let full_path = std::path::PathBuf::from(&panel.path).join(name.trim_end_matches('/'));
+        let details = file_operation::format_item_details(&full_path);
+
+        let name_style = if name.ends_with('/') {
+            Style::new().blue()
+        } else {
+            Style::new().green()
+        };
+
+        if details.is_empty() || panel_width < name.len() + details.len() + 2 {
+            return ListItem::new(name.clone()).style(name_style);
+        }
+
+        let padding = panel_width.saturating_sub(name.len() + details.len());
+        let line = Line::from(vec![
+            Span::styled(name.clone(), name_style),
+            Span::raw(" ".repeat(padding)),
+            Span::styled(details, Style::new().dark_gray()),
+        ]);
+        ListItem::new(line)
     }).collect();
 
     let title = if panel.filter.is_empty() {

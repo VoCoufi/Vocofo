@@ -81,6 +81,23 @@ pub fn create_dir(path: impl AsRef<Path>) -> Result<()> {
     fs::create_dir_all(path)
 }
 
+/// Returns a short size string for a file or item count for a directory
+pub fn format_item_details(path: &Path) -> String {
+    let metadata = match fs::metadata(path) {
+        Ok(m) => m,
+        Err(_) => return String::new(),
+    };
+
+    if metadata.is_dir() {
+        match fs::read_dir(path) {
+            Ok(entries) => format!("{} items", entries.count()),
+            Err(_) => String::new(),
+        }
+    } else {
+        format_size(metadata.len())
+    }
+}
+
 /// Opens a file in the default editor
 pub fn open_file(path: impl AsRef<Path>) -> FileResult<()> {
     edit::edit_file(path.as_ref())

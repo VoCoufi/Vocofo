@@ -103,6 +103,7 @@ fn create_keyboard_shortcuts() -> String {
         ("R", "Rename"),
         ("P", "New Folder"),
         ("/", "Search"),
+        ("=", "Sync Dir"),
         ("Tab", "Switch Panel"),
         ("Bksp", "Parent Dir"),
         ("F3", "Preview"),
