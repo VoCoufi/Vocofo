@@ -51,12 +51,21 @@ pub fn render_panel(frame: &mut Frame, area: Rect, panel: &mut PanelState, is_ac
         ListItem::new(line)
     }).collect();
 
-    let title = if is_searching {
-        format!("{} [/: {}]", panel.path, panel.filter)
-    } else if !panel.filter.is_empty() {
-        format!("{} [filter: {}]", panel.path, panel.filter)
+    // Store visible rows for PageUp/PageDown calculations
+    panel.visible_rows = area.height.saturating_sub(2) as usize;
+
+    let position = if panel.filtered_items.is_empty() {
+        " [0/0]".to_string()
     } else {
-        panel.path.clone()
+        format!(" [{}/{}]", panel.state + 1, panel.filtered_items.len())
+    };
+
+    let title = if is_searching {
+        format!("{} [/: {}]{}", panel.path, panel.filter, position)
+    } else if !panel.filter.is_empty() {
+        format!("{} [filter: {}]{}", panel.path, panel.filter, position)
+    } else {
+        format!("{}{}", panel.path, position)
     };
 
     let list = create_directory_list(&title, items, is_active);
@@ -178,6 +187,54 @@ pub fn popup_name_creation(frame: &mut Frame, context: &mut Context) -> RenderRe
         .style(Style::default().bg(Color::Blue).fg(Color::Black));
 
     frame.render_widget(warning, chunks[1]);
+    frame.render_widget(para, chunks[3]);
+
+    Ok(())
+}
+
+pub fn popup_create_file(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let area = centered_rect_dialog(frame.area(), 80, 10);
+
+    let dialog_block = Block::default()
+        .title(" Create file ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Green));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(0)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ])
+        .split(inner_area);
+
+    let label = Paragraph::new("Write the name of the file.")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+
+    let empty = String::new();
+    let input_text = context.get_input().unwrap_or(&empty);
+    let para = Paragraph::new(input_text.clone())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Black))
+                .padding(Padding::new(1, 1, 0, 0))
+        )
+        .alignment(Alignment::Left)
+        .style(Style::default().bg(Color::Blue).fg(Color::Black));
+
+    frame.render_widget(label, chunks[1]);
     frame.render_widget(para, chunks[3]);
 
     Ok(())

@@ -19,6 +19,7 @@ pub struct PanelState {
     pub selected: HashSet<String>,
     pub preview_content: Option<String>,
     pub preview_last_item: Option<String>,
+    pub visible_rows: usize,
 }
 
 impl PanelState {
@@ -34,6 +35,7 @@ impl PanelState {
             selected: HashSet::new(),
             preview_content: None,
             preview_last_item: None,
+            visible_rows: 20,
         }
     }
 
@@ -45,6 +47,23 @@ impl PanelState {
         if self.state > 0 {
             self.state -= 1;
         }
+    }
+
+    pub fn page_down(&mut self) {
+        let max = self.filtered_items.len().saturating_sub(1);
+        self.state = (self.state + self.visible_rows).min(max);
+    }
+
+    pub fn page_up(&mut self) {
+        self.state = self.state.saturating_sub(self.visible_rows);
+    }
+
+    pub fn go_to_first(&mut self) {
+        self.state = 0;
+    }
+
+    pub fn go_to_last(&mut self) {
+        self.state = self.filtered_items.len().saturating_sub(1);
     }
 
     pub fn get_selected_item(&self) -> Option<&String> {
@@ -218,6 +237,7 @@ pub enum ClipboardMode {
 pub enum UiState {
     Normal,
     CreatePopup,
+    CreateFilePopup,
     ConfirmDelete,
     RenamePopup,
     SearchMode,
@@ -241,6 +261,7 @@ pub struct Context {
     pub active_operation: Option<mpsc::Receiver<FileOpResult>>,
     pub operation_description: Option<String>,
     pub spinner_tick: u8,
+    pub pending_g: bool,
 }
 
 impl Context {
@@ -271,6 +292,7 @@ impl Context {
             active_operation: None,
             operation_description: None,
             spinner_tick: 0,
+            pending_g: false,
         })
     }
 

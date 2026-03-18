@@ -81,7 +81,13 @@ fn render_status_bar(frame: &mut Frame, area: &Rect, context: &Context) {
     } else if let Some(message) = context.get_status_message() {
         (message.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
     } else {
-        (create_keyboard_shortcuts(), Style::default().fg(Color::White))
+        let clipboard = format_clipboard_indicator(context);
+        let shortcuts = create_keyboard_shortcuts();
+        if clipboard.is_empty() {
+            (shortcuts, Style::default().fg(Color::White))
+        } else {
+            (format!("{} | {}", clipboard, shortcuts), Style::default().fg(Color::White))
+        }
     };
 
     let status_bar = Paragraph::new(text)
@@ -89,6 +95,26 @@ fn render_status_bar(frame: &mut Frame, area: &Rect, context: &Context) {
         .alignment(Alignment::Left);
 
     frame.render_widget(status_bar, *area);
+}
+
+/// Formats the clipboard indicator for the status bar
+fn format_clipboard_indicator(context: &Context) -> String {
+    let mode_label = match context.clipboard_mode {
+        crate::context::ClipboardMode::Copy => "COPY",
+        crate::context::ClipboardMode::Cut => "CUT",
+    };
+
+    if !context.copy_paths.is_empty() {
+        format!("[{}: {} items]", mode_label, context.copy_paths.len())
+    } else if !context.copy_path.is_empty() {
+        let name = std::path::Path::new(&context.copy_path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| context.copy_path.clone());
+        format!("[{}: {}]", mode_label, name)
+    } else {
+        String::new()
+    }
 }
 
 /// Creates a formatted string of keyboard shortcuts
@@ -102,6 +128,7 @@ fn create_keyboard_shortcuts() -> String {
         ("X", "Cut"),
         ("R", "Rename"),
         ("P", "New Folder"),
+        ("N", "New File"),
         ("/", "Search"),
         ("=", "Sync Dir"),
         ("Tab", "Switch Panel"),
@@ -180,6 +207,7 @@ fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
     match context.get_ui_state().ok_or("UI state not available")? {
         UiState::ConfirmDelete => render::popup_confirm_delete(frame, context)?,
         UiState::CreatePopup => render::popup_name_creation(frame, context)?,
+        UiState::CreateFilePopup => render::popup_create_file(frame, context)?,
         UiState::RenamePopup => render::popup_rename(frame, context)?,
         UiState::ConfirmOverwrite => render::popup_confirm_overwrite(frame, context)?,
         UiState::SearchMode | UiState::Normal => ()

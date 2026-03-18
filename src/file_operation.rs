@@ -138,6 +138,29 @@ pub fn handle_create_directory(context: &mut Context) -> FileResult<()> {
     Ok(())
 }
 
+/// Handle creating a new file from the user input
+pub fn handle_create_file(context: &mut Context) -> FileResult<()> {
+    let input = context.get_input()
+        .ok_or_else(|| Box::<dyn std::error::Error>::from("No input provided"))?;
+
+    if input.is_empty() {
+        return Err("Filename cannot be empty".into());
+    }
+
+    let path = PathBuf::from(&context.active().path).join(input);
+
+    if path.exists() {
+        return Err(format!("Already exists: {}", path.display()).into());
+    }
+
+    context.set_ui_state(Normal);
+    fs::File::create(&path)?;
+    context.set_input(String::default());
+    context.active_mut().state = 0;
+
+    Ok(())
+}
+
 /// Renames a file or directory
 pub fn rename(old_path: impl AsRef<Path>, new_path: impl AsRef<Path>) -> Result<()> {
     let old = old_path.as_ref();

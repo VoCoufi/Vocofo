@@ -10,6 +10,16 @@ type EventResult = Result<(), Box<dyn std::error::Error>>;
 pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
     context.clear_status_message();
 
+    // Handle pending gg sequence
+    if context.pending_g {
+        context.pending_g = false;
+        if key_event.code == KeyCode::Char('g') {
+            context.active_mut().go_to_first();
+            return Ok(());
+        }
+        // Not 'g' — fall through to normal handling
+    }
+
     match (key_event.code, key_event.modifiers) {
         (KeyCode::Char('q'), _) | (KeyCode::Esc, _) => {
             // If filter is active, clear it instead of quitting
@@ -104,6 +114,55 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
         (KeyCode::F(3), _) => {
             context.show_preview = !context.show_preview;
         }
+        // Page navigation
+        (KeyCode::PageDown, _) => {
+            context.active_mut().page_down();
+        }
+        (KeyCode::PageUp, _) => {
+            context.active_mut().page_up();
+        }
+        (KeyCode::Home, _) => {
+            context.active_mut().go_to_first();
+        }
+        (KeyCode::End, _) => {
+            context.active_mut().go_to_last();
+        }
+        // Vim-style navigation
+        (KeyCode::Char('j'), _) => {
+            let panel = context.active_mut();
+            if panel.filtered_items.len() > panel.state + 1 {
+                panel.increment_state();
+            }
+        }
+        (KeyCode::Char('k'), _) => {
+            let panel = context.active_mut();
+            if panel.state > 0 {
+                panel.decrease_state();
+            }
+        }
+        (KeyCode::Char('l'), _) => {
+            if let Some(err) = context.active_mut().open_item() {
+                context.set_status_message(&err);
+            }
+            context.active_mut().clear_filter();
+            context.active_mut().invalidate_directory_cache();
+        }
+        (KeyCode::Char('h'), _) => {
+            if let Some(err) = context.active_mut().navigate_to_parent() {
+                context.set_status_message(&err);
+            }
+            context.active_mut().clear_filter();
+        }
+        (KeyCode::Char('G'), _) => {
+            context.active_mut().go_to_last();
+        }
+        (KeyCode::Char('g'), _) => {
+            context.pending_g = true;
+        }
+        // Create file
+        (KeyCode::Char('n'), _) => {
+            context.set_ui_state(UiState::CreateFilePopup);
+        }
         _ => {}
     }
 
@@ -186,6 +245,39 @@ pub fn handle_popup_event(context: &mut Context, key_event: KeyEvent) -> EventRe
         }
         KeyCode::Esc => {
             context.set_ui_state(UiState::Normal);
+        }
+        KeyCode::Char(c) => {
+            context.input.push(c);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Handles key events for the create file popup
+pub fn handle_file_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+    match key_event.code {
+        KeyCode::Backspace => {
+            if !context.input.is_empty() {
+                context.input.pop();
+            }
+        }
+        KeyCode::Enter => {
+            match file_operation::handle_create_file(context) {
+                Ok(_) => {
+                    context.active_mut().invalidate_directory_cache();
+                    context.set_status_message("File created");
+                }
+                Err(e) => {
+                    context.set_ui_state(UiState::Normal);
+                    context.set_input(String::default());
+                    context.set_status_message(&format!("Create failed: {}", e));
+                }
+            }
+        }
+        KeyCode::Esc => {
+            context.set_ui_state(UiState::Normal);
+            context.set_input(String::default());
         }
         KeyCode::Char(c) => {
             context.input.push(c);

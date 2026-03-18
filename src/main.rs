@@ -203,6 +203,7 @@ fn handle_events(context: &mut Context, timeout: Duration) -> AppResult<bool> {
                 match context.ui_state {
                     context::UiState::Normal => event_handler::handle_main_event(context, key),
                     context::UiState::CreatePopup => event_handler::handle_popup_event(context, key),
+                    context::UiState::CreateFilePopup => event_handler::handle_file_popup_event(context, key),
                     context::UiState::ConfirmDelete => event_handler::handle_confirm_popup_event(context, key),
                     context::UiState::RenamePopup => event_handler::handle_rename_popup_event(context, key),
                     context::UiState::SearchMode => event_handler::handle_search_event(context, key),
