@@ -51,6 +51,7 @@ pub fn list_children(panel: &mut PanelState) -> Result<()> {
     panel.items.extend(folders);
     panel.items.extend(files);
     panel.items_dirty = false;
+    panel.apply_filter();
 
     Ok(())
 }

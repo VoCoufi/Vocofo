@@ -9,6 +9,8 @@ use std::sync::mpsc;
 pub struct PanelState {
     pub path: String,
     pub items: Vec<String>,
+    pub filtered_items: Vec<String>,
+    pub filter: String,
     pub state: usize,
     pub items_dirty: bool,
     pub preview_content: Option<String>,
@@ -20,6 +22,8 @@ impl PanelState {
         Self {
             path,
             items: Vec::new(),
+            filtered_items: Vec::new(),
+            filter: String::new(),
             state: 0,
             items_dirty: true,
             preview_content: None,
@@ -38,12 +42,33 @@ impl PanelState {
     }
 
     pub fn get_selected_item(&self) -> Option<&String> {
-        self.items.get(self.state)
+        self.filtered_items.get(self.state)
     }
 
     pub fn get_metadata_selected_item(&self) -> Option<Metadata> {
         let path = PathBuf::from(self.path.clone()).join(self.get_selected_item()?);
         fs::metadata(path).ok()
+    }
+
+    pub fn apply_filter(&mut self) {
+        if self.filter.is_empty() {
+            self.filtered_items = self.items.clone();
+        } else {
+            let filter_lower = self.filter.to_lowercase();
+            self.filtered_items = self.items.iter()
+                .filter(|item| {
+                    *item == "../" || item.to_lowercase().contains(&filter_lower)
+                })
+                .cloned()
+                .collect();
+        }
+        self.state = 0;
+    }
+
+    pub fn clear_filter(&mut self) {
+        self.filter.clear();
+        self.filtered_items = self.items.clone();
+        self.state = 0;
     }
 
     pub fn set_full_path(&mut self) -> Option<String> {
@@ -155,6 +180,8 @@ pub enum UiState {
     CreatePopup,
     ConfirmDelete,
     RenamePopup,
+    SearchMode,
+    ConfirmOverwrite,
 }
 
 /// Central application state
@@ -168,6 +195,7 @@ pub struct Context {
     pub input: String,
     pub copy_path: String,
     pub clipboard_mode: ClipboardMode,
+    pub pending_paste: Option<(PathBuf, PathBuf, bool)>,
     pub status_message: Option<String>,
     pub active_operation: Option<mpsc::Receiver<FileOpResult>>,
     pub operation_description: Option<String>,
@@ -190,6 +218,7 @@ impl Context {
             input: String::default(),
             copy_path: String::default(),
             clipboard_mode: ClipboardMode::Copy,
+            pending_paste: None,
             status_message: None,
             active_operation: None,
             operation_description: None,

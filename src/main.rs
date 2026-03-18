@@ -203,6 +203,8 @@ fn handle_events(context: &mut Context, timeout: Duration) -> AppResult<bool> {
                     context::UiState::CreatePopup => event_handler::handle_popup_event(context, key),
                     context::UiState::ConfirmDelete => event_handler::handle_confirm_popup_event(context, key),
                     context::UiState::RenamePopup => event_handler::handle_rename_popup_event(context, key),
+                    context::UiState::SearchMode => event_handler::handle_search_event(context, key),
+                    context::UiState::ConfirmOverwrite => event_handler::handle_overwrite_popup_event(context, key),
                 }?;
             }
         }

@@ -102,6 +102,7 @@ fn create_keyboard_shortcuts() -> String {
         ("X", "Cut"),
         ("R", "Rename"),
         ("P", "New Folder"),
+        ("/", "Search"),
         ("Tab", "Switch Panel"),
         ("Bksp", "Parent Dir"),
         ("F3", "Preview"),
@@ -176,7 +177,8 @@ fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
         UiState::ConfirmDelete => render::popup_confirm_delete(frame, context)?,
         UiState::CreatePopup => render::popup_name_creation(frame, context)?,
         UiState::RenamePopup => render::popup_rename(frame, context)?,
-        UiState::Normal => ()
+        UiState::ConfirmOverwrite => render::popup_confirm_overwrite(frame, context)?,
+        UiState::SearchMode | UiState::Normal => ()
     }
 
     Ok(())

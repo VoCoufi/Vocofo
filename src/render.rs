@@ -19,8 +19,8 @@ pub fn render_panel(frame: &mut Frame, area: Rect, panel: &mut PanelState, is_ac
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
     }
 
-    // Build styled ListItems from cached panel.items (no clone needed)
-    let items: Vec<ListItem> = panel.items.iter().map(|name| {
+    // Build styled ListItems from filtered items
+    let items: Vec<ListItem> = panel.filtered_items.iter().map(|name| {
         if name.ends_with('/') {
             ListItem::new(name.clone()).style(Style::new().blue())
         } else {
@@ -28,7 +28,13 @@ pub fn render_panel(frame: &mut Frame, area: Rect, panel: &mut PanelState, is_ac
         }
     }).collect();
 
-    let list = create_directory_list(&panel.path, items, is_active);
+    let title = if panel.filter.is_empty() {
+        panel.path.clone()
+    } else {
+        format!("{} [filter: {}]", panel.path, panel.filter)
+    };
+
+    let list = create_directory_list(&title, items, is_active);
 
     let mut state = ListState::default().with_selected(Some(panel.state));
 
@@ -197,6 +203,70 @@ pub fn popup_rename(frame: &mut Frame, context: &mut Context) -> RenderResult<()
 
     frame.render_widget(label, chunks[1]);
     frame.render_widget(para, chunks[3]);
+
+    Ok(())
+}
+
+/// Renders an overwrite confirmation popup
+pub fn popup_confirm_overwrite(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let file_name = context.pending_paste.as_ref()
+        .and_then(|(_, to, _)| to.file_name())
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "file".to_string());
+
+    let area = centered_rect_dialog(frame.area(), 80, 10);
+
+    let dialog_block = Block::default()
+        .title(" Confirm Overwrite ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(0)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(0),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ])
+        .split(inner_area);
+
+    let warning = Paragraph::new("⚠️ File already exists!")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+
+    let message = Paragraph::new(format!("Overwrite \"{}\"?", file_name))
+        .alignment(Alignment::Center)
+        .style(Style::default());
+
+    let button_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(10),
+            Constraint::Percentage(35),
+            Constraint::Percentage(10),
+            Constraint::Percentage(35),
+            Constraint::Percentage(10),
+        ])
+        .split(chunks[4]);
+
+    let selected = context.get_confirm_button_selected().unwrap_or(false);
+    let yes_button = create_sized_button("Yes", selected);
+    let no_button = create_sized_button("No", !selected);
+
+    frame.render_widget(warning, chunks[0]);
+    frame.render_widget(message, chunks[2]);
+    frame.render_widget(yes_button, button_chunks[1]);
+    frame.render_widget(no_button, button_chunks[3]);
 
     Ok(())
 }
