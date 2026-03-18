@@ -42,6 +42,7 @@ pub fn render_left_directory(frame: &mut Frame, inner_layout: Rc<Vec<Rect>>, con
 }
 
 /// Renders the right directory panel with a file/folder list
+#[allow(dead_code)]
 pub fn render_right_directory(frame: &mut Frame, inner_layout: Rc<[Rect]>, context: &mut Context) -> RenderResult<()> {
     // Get the list of files and folders from the current path
     let items = file_operation::list_children(context)
@@ -266,7 +267,7 @@ fn create_directory_list<'a>(path: &str, items: Vec<ListItem<'a>>, is_primary: b
 }
 
 /// Creates a styled button with minimum width and optional selected state
-fn create_sized_button(text: &str, selected: bool) -> Paragraph {
+fn create_sized_button(text: &str, selected: bool) -> Paragraph<'_> {
     let style = if selected {
         Style::default().bg(Color::Blue).fg(Color::Black)
     } else {

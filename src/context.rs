@@ -25,8 +25,6 @@ pub struct Context {
     pub items: Vec<String>,
     pub state: usize,
     pub ui_state: UiState,
-    pub popup: bool,
-    pub confirm_popup: bool,
     pub confirm_popup_size: bool,
     pub input: String,
     pub copy_path: String,
@@ -63,8 +61,6 @@ impl Context {
             items: Vec::new(),
             state: 0,
             ui_state: UiState::Normal,
-            popup: false,
-            confirm_popup: false,
             confirm_popup_size: false,
             input: String::default(),
             copy_path: String::default(),
@@ -100,23 +96,6 @@ impl Context {
         self.items.get(self.state)
     }
 
-    pub fn get_popup(&self) -> Option<bool> {
-        Some(self.popup)
-    }
-
-    pub fn set_popup(&mut self) {
-        let item = match self.get_popup() {
-            Some(item) => item,
-            None => return,
-        };
-
-        self.popup = !item
-    }
-    
-    pub fn get_confirm_popup(&self) -> Option<bool> {
-        Some(self.confirm_popup)
-    }
-    
     pub fn set_ui_state(&mut self, ui_state: UiState) {
         self.ui_state = ui_state;
     }
@@ -125,15 +104,6 @@ impl Context {
         Some(self.ui_state)
     }
     
-    pub fn set_confirm_popup(&mut self) {
-        let item = match self.get_confirm_popup() {
-            Some(item) => item,
-            None => return,
-        };
-
-        self.confirm_popup = !item
-    }
-
     pub fn get_confirm_button_selected(&self) -> Option<bool> {
         Some(self.confirm_popup_size)
     }

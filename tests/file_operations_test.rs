@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 // Import the functions we want to test
@@ -188,7 +187,7 @@ fn test_list_children_empty_directory() {
     let result = list_children(&mut context);
     assert!(result.is_ok());
 
-    let items = result.unwrap();
+    let _items = result.unwrap();
     // Should only have "../" entry
     assert_eq!(context.items.len(), 1);
     assert_eq!(context.items[0], "../");

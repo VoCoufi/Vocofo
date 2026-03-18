@@ -225,7 +225,7 @@ fn test_set_confirm_button_selected() {
 
 #[test]
 fn test_get_metadata_selected_item_file() {
-    let (mut context, temp) = create_test_context();
+    let (mut context, _temp) = create_test_context();
 
     // Select a file
     let file_idx = context.items.iter().position(|i| i == "file1.txt").unwrap();
@@ -257,7 +257,7 @@ fn test_get_metadata_selected_item_folder() {
 
 #[test]
 fn test_get_metadata_selected_item_no_selection() {
-    let mut context = Context::new().unwrap();
+    let context = Context::new().unwrap();
     // No items in list
 
     let metadata = context.get_metadata_selected_item();
