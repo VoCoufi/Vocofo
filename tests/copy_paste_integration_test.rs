@@ -1,7 +1,7 @@
 use std::fs;
 use tempfile::TempDir;
 use vocofo::background_op;
-use vocofo::context::Context;
+use vocofo::context::{ClipboardMode, Context};
 use vocofo::file_operation;
 
 /// Helper: resolve paths and run a synchronous copy via background_op
@@ -244,4 +244,79 @@ fn test_overwrite_existing_file_fails() {
     assert!(result.unwrap_err().contains("already exists"));
 
     assert_eq!(fs::read_to_string(dest.join("file.txt")).unwrap(), "existing");
+}
+
+#[test]
+fn test_cut_move_file_workflow() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    let source_dir = base.join("source");
+    let dest_dir = base.join("dest");
+    fs::create_dir(&source_dir).unwrap();
+    fs::create_dir(&dest_dir).unwrap();
+    fs::write(source_dir.join("moveme.txt"), "move content").unwrap();
+
+    let mut context = Context::new().unwrap();
+    context.panels[0].path = source_dir.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
+
+    let file_idx = context.panels[0].items.iter().position(|i| i == "moveme.txt").unwrap();
+    context.panels[0].state = file_idx;
+    context.set_copy_path();
+    context.clipboard_mode = ClipboardMode::Cut;
+
+    // Navigate to destination
+    context.panels[0].path = dest_dir.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
+    context.panels[0].state = 0;
+
+    // Move via background op
+    let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
+    let rx = background_op::spawn_move(from, to, "test move".to_string());
+    let result = rx.recv().unwrap();
+    assert!(result.result.is_ok(), "Move failed: {:?}", result.result.err());
+    assert!(result.clear_clipboard);
+
+    // File should exist in dest, not in source
+    assert!(dest_dir.join("moveme.txt").exists());
+    assert!(!source_dir.join("moveme.txt").exists());
+    assert_eq!(fs::read_to_string(dest_dir.join("moveme.txt")).unwrap(), "move content");
+}
+
+#[test]
+fn test_cut_move_folder_workflow() {
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    let source_dir = base.join("source");
+    let dest_dir = base.join("dest");
+    fs::create_dir(&source_dir).unwrap();
+    fs::create_dir(&dest_dir).unwrap();
+
+    let folder = source_dir.join("myfolder");
+    fs::create_dir(&folder).unwrap();
+    fs::write(folder.join("inner.txt"), "inner").unwrap();
+
+    let mut context = Context::new().unwrap();
+    context.panels[0].path = source_dir.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
+
+    let folder_idx = context.panels[0].items.iter().position(|i| i == "myfolder/").unwrap();
+    context.panels[0].state = folder_idx;
+    context.set_copy_path();
+    context.clipboard_mode = ClipboardMode::Cut;
+
+    context.panels[0].path = dest_dir.to_string_lossy().to_string();
+    file_operation::list_children(&mut context.panels[0]).unwrap();
+    context.panels[0].state = 0;
+
+    let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
+    let rx = background_op::spawn_move(from, to, "test move folder".to_string());
+    let result = rx.recv().unwrap();
+    assert!(result.result.is_ok(), "Move folder failed: {:?}", result.result.err());
+
+    assert!(dest_dir.join("myfolder").exists());
+    assert!(dest_dir.join("myfolder/inner.txt").exists());
+    assert!(!source_dir.join("myfolder").exists());
 }

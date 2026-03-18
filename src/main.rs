@@ -130,6 +130,14 @@ fn run_app(
             match result.result {
                 Ok(()) => {
                     context.invalidate_all_caches();
+                    // Clamp selection state to valid range after items may have changed
+                    for panel in &mut context.panels {
+                        // Force refresh so items are up to date
+                        let _ = file_operation::list_children(panel);
+                        if panel.state > 0 && panel.state >= panel.items.len() {
+                            panel.state = panel.items.len().saturating_sub(1);
+                        }
+                    }
                     context.set_status_message(&format!("{} done", result.description.trim_end_matches("...")));
                     if result.clear_clipboard {
                         context.copy_path = String::default();
