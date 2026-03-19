@@ -226,21 +226,33 @@ pub fn popup_command_palette(frame: &mut Frame, context: &mut Context) -> Render
         chunks[1],
     );
 
-    let items: Vec<Line> = state.filtered_indices.iter().take(15).enumerate().map(|(i, &action_idx)| {
-        let action = &PALETTE_ACTIONS[action_idx];
-        let label_width = chunks[2].width.saturating_sub(10) as usize;
-        let padded_label = format!(" {:<width$}", action.label, width = label_width);
-        let (style, shortcut_style) = if i == state.selected {
-            (Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD),
-             Style::default().bg(Color::Blue).fg(Color::Gray))
-        } else {
-            (Style::default().fg(Color::White), Style::default().fg(Color::DarkGray))
-        };
-        Line::from(vec![
-            Span::styled(padded_label, style),
-            Span::styled(format!("{:>6} ", action.shortcut), shortcut_style),
-        ])
-    }).collect();
+    let max_visible = chunks[2].height as usize;
+    let scroll_offset = if state.selected >= max_visible {
+        state.selected - max_visible + 1
+    } else {
+        0
+    };
+
+    let items: Vec<Line> = state.filtered_indices.iter()
+        .skip(scroll_offset)
+        .take(max_visible)
+        .enumerate()
+        .map(|(i, &action_idx)| {
+            let action = &PALETTE_ACTIONS[action_idx];
+            let label_width = chunks[2].width.saturating_sub(10) as usize;
+            let padded_label = format!(" {:<width$}", action.label, width = label_width);
+            let is_selected = i + scroll_offset == state.selected;
+            let (style, shortcut_style) = if is_selected {
+                (Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD),
+                 Style::default().bg(Color::Blue).fg(Color::Gray))
+            } else {
+                (Style::default().fg(Color::White), Style::default().fg(Color::DarkGray))
+            };
+            Line::from(vec![
+                Span::styled(padded_label, style),
+                Span::styled(format!("{:>6} ", action.shortcut), shortcut_style),
+            ])
+        }).collect();
 
     if items.is_empty() {
         frame.render_widget(
