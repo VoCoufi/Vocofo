@@ -2,6 +2,9 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 use crate::backend::{DirEntry, FileInfo, FilesystemBackend};
 
 pub struct LocalBackend;
@@ -19,6 +22,10 @@ impl Default for LocalBackend {
 }
 
 fn metadata_to_fileinfo(name: &str, meta: &fs::Metadata) -> FileInfo {
+    #[cfg(unix)]
+    let mode = Some(meta.permissions().mode());
+    #[cfg(not(unix))]
+    let mode = None;
     FileInfo {
         name: name.to_string(),
         is_dir: meta.is_dir(),
@@ -27,6 +34,7 @@ fn metadata_to_fileinfo(name: &str, meta: &fs::Metadata) -> FileInfo {
         size: meta.len(),
         modified: meta.modified().ok(),
         readonly: meta.permissions().readonly(),
+        mode,
     }
 }
 
@@ -189,5 +197,11 @@ impl FilesystemBackend for LocalBackend {
 
     fn file_name(&self, path: &str) -> Option<String> {
         Path::new(path).file_name().map(|n| n.to_string_lossy().to_string())
+    }
+
+    #[cfg(unix)]
+    fn chmod(&self, path: &str, mode: u32) -> io::Result<()> {
+        let perms = fs::Permissions::from_mode(mode);
+        fs::set_permissions(path, perms)
     }
 }

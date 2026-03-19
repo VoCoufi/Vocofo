@@ -1,5 +1,6 @@
 use std::io;
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crossterm::{
     event::{self, DisableFocusChange, DisableMouseCapture, EnableFocusChange, EnableMouseCapture, Event, KeyEventKind},
@@ -20,6 +21,8 @@ mod messages_enum;
 mod background_op;
 mod config;
 mod local_backend;
+#[cfg(feature = "sftp")]
+mod scp_backend;
 #[cfg(feature = "sftp")]
 mod sftp_backend;
 
@@ -135,6 +138,7 @@ fn run_app(
 
         // Check for completed background operations
         if let Some(result) = context.check_operation() {
+            context.transfer_progress = None;
             match result.result {
                 Ok(()) => {
                     context.invalidate_all_caches();
@@ -160,6 +164,9 @@ fn run_app(
         // Advance spinner for progress indicator
         context.spinner_tick = context.spinner_tick.wrapping_add(1);
 
+        // Keep-alive check for remote connections (every 60 seconds)
+        check_keepalive(context);
+
         // Handle events and break the loop if exit is requested
         if handle_events(context, POLL_TIMEOUT)? {
             break;
@@ -167,6 +174,73 @@ fn run_app(
     }
 
     Ok(())
+}
+
+/// Check remote connections and attempt reconnect if needed
+fn check_keepalive(context: &mut Context) {
+    const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(60);
+
+    if context.last_keepalive.elapsed() < KEEPALIVE_INTERVAL {
+        return;
+    }
+    context.last_keepalive = Instant::now();
+
+    for i in 0..2 {
+        if context.panels[i].backend.is_local() {
+            continue;
+        }
+        if !context.panels[i].backend.is_connected() {
+            if let Some(params) = context.panels[i].backend.connection_params() {
+                match reconnect_backend(&params) {
+                    Ok(new_backend) => {
+                        context.panels[i].backend = new_backend;
+                        context.panels[i].invalidate_directory_cache();
+                        context.set_status_message("Reconnected");
+                    }
+                    Err(e) => {
+                        context.set_status_message(&format!("Connection lost: {}", e));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Create a new backend from connection parameters
+pub fn reconnect_backend(params: &backend::ConnectionParams) -> io::Result<Arc<dyn backend::FilesystemBackend>> {
+    match params.protocol {
+        backend::ConnectionProtocol::Sftp => {
+            #[cfg(feature = "sftp")]
+            {
+                sftp_backend::SftpBackend::connect(
+                    &params.host,
+                    params.port,
+                    &params.username,
+                    &params.password,
+                    params.key_path.as_deref(),
+                ).map(|b| Arc::new(b) as Arc<dyn backend::FilesystemBackend>)
+            }
+            #[cfg(not(feature = "sftp"))]
+            {
+                Err(io::Error::new(io::ErrorKind::Unsupported, "SFTP not compiled"))
+            }
+        }
+        backend::ConnectionProtocol::Ftp => {
+            #[cfg(feature = "ftp")]
+            {
+                ftp_backend::FtpBackend::connect(
+                    &params.host,
+                    params.port,
+                    &params.username,
+                    &params.password,
+                ).map(|b| Arc::new(b) as Arc<dyn backend::FilesystemBackend>)
+            }
+            #[cfg(not(feature = "ftp"))]
+            {
+                Err(io::Error::new(io::ErrorKind::Unsupported, "FTP not compiled"))
+            }
+        }
+    }
 }
 
 /// Handles input events for the application, delegating to appropriate event handlers based on the current application state.
@@ -212,9 +286,12 @@ fn handle_events(context: &mut Context, timeout: Duration) -> AppResult<bool> {
                     context::UiState::CreateFilePopup => event_handler::handle_file_popup_event(context, key),
                     context::UiState::ConfirmDelete => event_handler::handle_confirm_popup_event(context, key),
                     context::UiState::RenamePopup => event_handler::handle_rename_popup_event(context, key),
+                    context::UiState::ChmodPopup => event_handler::handle_chmod_popup_event(context, key),
                     context::UiState::SearchMode => event_handler::handle_search_event(context, key),
                     context::UiState::ConfirmOverwrite => event_handler::handle_overwrite_popup_event(context, key),
                     context::UiState::ConnectDialog => event_handler::handle_connect_dialog_event(context, key),
+                    context::UiState::BookmarkList => event_handler::handle_bookmark_list_event(context, key),
+                    context::UiState::BookmarkNameInput => event_handler::handle_bookmark_name_event(context, key),
                 }?;
             }
         }

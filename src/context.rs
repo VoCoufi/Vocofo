@@ -6,6 +6,7 @@ use crate::local_backend::LocalBackend;
 use std::collections::HashSet;
 use std::sync::mpsc;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// State for a single directory panel
 pub struct PanelState {
@@ -246,14 +247,13 @@ pub enum UiState {
     SearchMode,
     ConfirmOverwrite,
     ConnectDialog,
+    ChmodPopup,
+    BookmarkList,
+    BookmarkNameInput,
 }
 
-/// Connection protocol for remote backends
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ConnectionProtocol {
-    Sftp,
-    Ftp,
-}
+// ConnectionProtocol and ConnectionParams are defined in backend.rs
+pub use crate::backend::{ConnectionParams, ConnectionProtocol};
 
 /// State for the connection dialog
 #[derive(Debug, Clone)]
@@ -318,6 +318,10 @@ pub struct Context {
     pub spinner_tick: u8,
     pub pending_g: bool,
     pub connect_dialog: Option<ConnectDialogState>,
+    pub config: Config,
+    pub last_keepalive: Instant,
+    pub bookmark_selected: usize,
+    pub transfer_progress: Option<Arc<crate::background_op::TransferProgress>>,
 }
 
 impl Context {
@@ -353,6 +357,10 @@ impl Context {
             spinner_tick: 0,
             pending_g: false,
             connect_dialog: None,
+            config,
+            last_keepalive: Instant::now(),
+            bookmark_selected: 0,
+            transfer_progress: None,
         })
     }
 

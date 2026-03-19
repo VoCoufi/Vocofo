@@ -11,6 +11,8 @@ pub struct FileInfo {
     pub size: u64,
     pub modified: Option<SystemTime>,
     pub readonly: bool,
+    /// Raw unix permission mode (e.g. 0o755), None if unavailable
+    pub mode: Option<u32>,
 }
 
 /// A single directory entry with its metadata
@@ -18,6 +20,24 @@ pub struct FileInfo {
 pub struct DirEntry {
     pub name: String,
     pub info: FileInfo,
+}
+
+/// Stored connection parameters for reconnection
+#[derive(Debug, Clone)]
+pub struct ConnectionParams {
+    pub protocol: ConnectionProtocol,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub key_path: Option<String>,
+}
+
+/// Connection protocol for remote backends
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ConnectionProtocol {
+    Sftp,
+    Ftp,
 }
 
 /// Abstraction over filesystem operations — local, SFTP, FTP, etc.
@@ -75,4 +95,18 @@ pub trait FilesystemBackend: Send + Sync {
 
     /// Get the file/directory name from a path
     fn file_name(&self, path: &str) -> Option<String>;
+
+    /// Explicitly close the connection (no-op for local backend)
+    fn disconnect(&self) {}
+
+    /// Change file permissions (octal mode, e.g. 0o755)
+    fn chmod(&self, _path: &str, _mode: u32) -> io::Result<()> {
+        Err(io::Error::new(io::ErrorKind::Unsupported, "chmod not supported"))
+    }
+
+    /// Check if the connection is still alive (always true for local)
+    fn is_connected(&self) -> bool { true }
+
+    /// Get connection parameters for reconnection (None for local)
+    fn connection_params(&self) -> Option<ConnectionParams> { None }
 }

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
@@ -6,6 +7,21 @@ use std::{fs, io};
 
 use crate::backend::FilesystemBackend;
 use crate::file_operation;
+
+/// Shared progress tracking for file transfers
+pub struct TransferProgress {
+    pub bytes_transferred: AtomicU64,
+    pub total_bytes: AtomicU64,
+}
+
+impl TransferProgress {
+    pub fn new() -> Self {
+        Self {
+            bytes_transferred: AtomicU64::new(0),
+            total_bytes: AtomicU64::new(0),
+        }
+    }
+}
 
 pub struct FileOpResult {
     pub description: String,
@@ -34,9 +50,16 @@ pub fn spawn_copy_with_backend(
     from: String,
     to: String,
     description: String,
+    progress: Option<Arc<TransferProgress>>,
 ) -> mpsc::Receiver<FileOpResult> {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
+        // Set total size for progress tracking
+        if let Some(ref p) = progress {
+            if let Ok(info) = src_backend.metadata(&from) {
+                p.total_bytes.store(info.size, Ordering::Relaxed);
+            }
+        }
         let result = if Arc::ptr_eq(&src_backend, &dst_backend) {
             // Same backend: use native copy
             let info = src_backend.metadata(&from)
@@ -50,7 +73,7 @@ pub fn spawn_copy_with_backend(
             }
         } else {
             // Cross-backend: read from source, write to destination
-            cross_backend_copy(&src_backend, &dst_backend, &from, &to)
+            cross_backend_copy_with_progress(&src_backend, &dst_backend, &from, &to, progress.as_ref())
         };
         let _ = tx.send(FileOpResult {
             description,
@@ -68,10 +91,11 @@ pub fn spawn_move_with_backend(
     from: String,
     to: String,
     description: String,
+    progress: Option<Arc<TransferProgress>>,
 ) -> mpsc::Receiver<FileOpResult> {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
-        let result = move_with_backend_inner(&src_backend, &dst_backend, &from, &to);
+        let result = move_with_backend_inner(&src_backend, &dst_backend, &from, &to, progress.as_ref());
         let _ = tx.send(FileOpResult {
             description,
             result: result.map_err(|e| e.to_string()),
@@ -134,9 +158,20 @@ pub fn spawn_copy_batch_with_backend(
     items: Vec<(String, String)>,
     description: String,
     is_move: bool,
+    progress: Option<Arc<TransferProgress>>,
 ) -> mpsc::Receiver<FileOpResult> {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
+        // Calculate total size for progress
+        if let Some(ref p) = progress {
+            let mut total: u64 = 0;
+            for (from, _) in &items {
+                if let Ok(info) = src_backend.metadata(from) {
+                    total += info.size;
+                }
+            }
+            p.total_bytes.store(total, Ordering::Relaxed);
+        }
         let mut errors = Vec::new();
         for (from, to) in &items {
             let copy_result = if Arc::ptr_eq(&src_backend, &dst_backend) {
@@ -150,7 +185,7 @@ pub fn spawn_copy_batch_with_backend(
                     src_backend.copy_file(from, to)
                 }.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
             } else {
-                cross_backend_copy(&src_backend, &dst_backend, from, to)
+                cross_backend_copy_with_progress(&src_backend, &dst_backend, from, to, progress.as_ref())
             };
 
             if let Err(e) = copy_result {
@@ -182,6 +217,7 @@ fn move_with_backend_inner(
     dst_backend: &Arc<dyn FilesystemBackend>,
     from: &str,
     to: &str,
+    progress: Option<&Arc<TransferProgress>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if Arc::ptr_eq(src_backend, dst_backend) {
         // Same backend: try rename first, fallback to copy+delete
@@ -198,7 +234,7 @@ fn move_with_backend_inner(
         }
     } else {
         // Cross-backend: copy then delete source
-        cross_backend_copy(src_backend, dst_backend, from, to)?;
+        cross_backend_copy_with_progress(src_backend, dst_backend, from, to, progress)?;
         file_operation::delete_with_backend(src_backend, from)?;
     }
     Ok(())
@@ -211,6 +247,17 @@ fn cross_backend_copy(
     from: &str,
     to: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    cross_backend_copy_with_progress(src, dst, from, to, None)
+}
+
+/// Cross-backend copy with optional progress tracking
+fn cross_backend_copy_with_progress(
+    src: &Arc<dyn FilesystemBackend>,
+    dst: &Arc<dyn FilesystemBackend>,
+    from: &str,
+    to: &str,
+    progress: Option<&Arc<TransferProgress>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let info = src.metadata(from)?;
 
     if info.is_dir {
@@ -219,11 +266,30 @@ fn cross_backend_copy(
         for entry in entries {
             let src_child = src.join_path(from, &entry.name);
             let dst_child = dst.join_path(to, &entry.name);
-            cross_backend_copy(src, dst, &src_child, &dst_child)?;
+            cross_backend_copy_with_progress(src, dst, &src_child, &dst_child, progress)?;
         }
     } else {
-        let data = src.read_file(from, usize::MAX)?;
-        dst.write_file(to, &data)?;
+        // For files: read in chunks if large, update progress
+        const CHUNK_SIZE: usize = 256 * 1024; // 256KB chunks
+
+        if info.size <= CHUNK_SIZE as u64 {
+            // Small file: single read/write
+            let data = src.read_file(from, usize::MAX)?;
+            let len = data.len() as u64;
+            dst.write_file(to, &data)?;
+            if let Some(p) = progress {
+                p.bytes_transferred.fetch_add(len, Ordering::Relaxed);
+            }
+        } else {
+            // Large file: still full read (chunked transfer requires backend API changes)
+            // but track progress
+            let data = src.read_file(from, usize::MAX)?;
+            let len = data.len() as u64;
+            dst.write_file(to, &data)?;
+            if let Some(p) = progress {
+                p.bytes_transferred.fetch_add(len, Ordering::Relaxed);
+            }
+        }
     }
 
     Ok(())

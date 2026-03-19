@@ -58,6 +58,16 @@ impl Config {
             Err(_) => Self::default(),
         }
     }
+
+    pub fn save(&self) -> std::io::Result<()> {
+        let path = config_file_path();
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        fs::write(path, content)
+    }
 }
 
 fn config_file_path() -> PathBuf {

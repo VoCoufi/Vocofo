@@ -8,12 +8,13 @@ use std::time::UNIX_EPOCH;
 
 use ssh2::{Session, Sftp};
 
-use crate::backend::{DirEntry, FileInfo, FilesystemBackend};
+use crate::backend::{ConnectionParams, ConnectionProtocol, DirEntry, FileInfo, FilesystemBackend};
 
 pub struct SftpBackend {
     session: Mutex<Session>,
     sftp: Mutex<Sftp>,
     display: String,
+    params: ConnectionParams,
 }
 
 // Safety: Session/Sftp are not Sync but we protect them with Mutex
@@ -66,6 +67,14 @@ impl SftpBackend {
             display: format!("SFTP: {}@{}:{}", username, host, port),
             session: Mutex::new(session),
             sftp: Mutex::new(sftp),
+            params: ConnectionParams {
+                protocol: ConnectionProtocol::Sftp,
+                host: host.to_string(),
+                port,
+                username: username.to_string(),
+                password: password.to_string(),
+                key_path: key_path.map(|s| s.to_string()),
+            },
         })
     }
 }
@@ -85,6 +94,7 @@ fn filestat_to_fileinfo(name: &str, stat: &ssh2::FileStat) -> FileInfo {
         size,
         modified,
         readonly,
+        mode: stat.perm,
     }
 }
 
@@ -249,5 +259,38 @@ impl FilesystemBackend for SftpBackend {
     fn file_name(&self, path: &str) -> Option<String> {
         let path = path.trim_end_matches('/');
         path.rsplit('/').next().map(|s| s.to_string())
+    }
+
+    fn disconnect(&self) {
+        if let Ok(session) = self.session.lock() {
+            let _ = session.disconnect(None, "Client disconnected", None);
+        }
+    }
+
+    fn chmod(&self, path: &str, mode: u32) -> io::Result<()> {
+        let sftp = self.sftp.lock()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        let stat = ssh2::FileStat {
+            size: None,
+            uid: None,
+            gid: None,
+            perm: Some(mode),
+            atime: None,
+            mtime: None,
+        };
+        sftp.setstat(Path::new(path), stat)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    }
+
+    fn is_connected(&self) -> bool {
+        if let Ok(session) = self.session.lock() {
+            session.authenticated()
+        } else {
+            false
+        }
+    }
+
+    fn connection_params(&self) -> Option<ConnectionParams> {
+        Some(self.params.clone())
     }
 }

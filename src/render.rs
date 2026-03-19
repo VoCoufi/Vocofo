@@ -292,6 +292,55 @@ pub fn popup_rename(frame: &mut Frame, context: &mut Context) -> RenderResult<()
     Ok(())
 }
 
+/// Renders the chmod popup
+pub fn popup_chmod(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let area = centered_rect_dialog(frame.area(), 50, 8);
+
+    let dialog_block = Block::default()
+        .title(" chmod ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(0)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ])
+        .split(inner_area);
+
+    let label = Paragraph::new("Enter octal mode (e.g. 755):")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+
+    let empty = String::new();
+    let input_text = context.get_input().unwrap_or(&empty);
+    let para = Paragraph::new(input_text.clone())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Black))
+                .padding(Padding::new(1, 1, 0, 0))
+        )
+        .alignment(Alignment::Left)
+        .style(Style::default().bg(Color::Blue).fg(Color::Black));
+
+    frame.render_widget(label, chunks[1]);
+    frame.render_widget(para, chunks[3]);
+
+    Ok(())
+}
+
 /// Renders an overwrite confirmation popup
 pub fn popup_confirm_overwrite(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
     let file_name = context.pending_paste.as_ref()
@@ -354,6 +403,92 @@ pub fn popup_confirm_overwrite(frame: &mut Frame, context: &mut Context) -> Rend
     frame.render_widget(message, chunks[2]);
     frame.render_widget(yes_button, button_chunks[1]);
     frame.render_widget(no_button, button_chunks[3]);
+
+    Ok(())
+}
+
+/// Renders the bookmark list popup
+pub fn popup_bookmark_list(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let connections = &context.config.connections;
+    let height = (connections.len() as u16 + 4).min(20);
+    let area = centered_rect_dialog(frame.area(), 60, height);
+
+    let dialog_block = Block::default()
+        .title(" Bookmarks ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let items: Vec<Line> = connections.iter().enumerate().map(|(i, profile)| {
+        let text = format!(
+            " {} ({}://{}@{}:{}) ",
+            profile.name, profile.protocol, profile.username, profile.host, profile.port
+        );
+        let style = if i == context.bookmark_selected {
+            Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        Line::from(text).style(style)
+    }).collect();
+
+    let list = Paragraph::new(items);
+    frame.render_widget(list, inner_area);
+
+    Ok(())
+}
+
+/// Renders the bookmark name input popup
+pub fn popup_bookmark_name(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let area = centered_rect_dialog(frame.area(), 50, 8);
+
+    let dialog_block = Block::default()
+        .title(" Save Bookmark ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(0)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ])
+        .split(inner_area);
+
+    let label = Paragraph::new("Bookmark name:")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+
+    let empty = String::new();
+    let input_text = context.get_input().unwrap_or(&empty);
+    let para = Paragraph::new(input_text.clone())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Black))
+                .padding(Padding::new(1, 1, 0, 0))
+        )
+        .alignment(Alignment::Left)
+        .style(Style::default().bg(Color::Blue).fg(Color::Black));
+
+    frame.render_widget(label, chunks[1]);
+    frame.render_widget(para, chunks[3]);
 
     Ok(())
 }

@@ -2,14 +2,80 @@
 
 use std::io::{self, Cursor};
 use std::sync::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use suppaftp::FtpStream;
 
-use crate::backend::{DirEntry, FileInfo, FilesystemBackend};
+use crate::backend::{ConnectionParams, ConnectionProtocol, DirEntry, FileInfo, FilesystemBackend};
+
+/// Parse FTP LIST date fields ("Jan", "01", "12:00" or "2024") into SystemTime
+fn parse_ftp_date(month: &str, day: &str, time_or_year: &str) -> Option<SystemTime> {
+    let month_num = match month {
+        "Jan" => 1, "Feb" => 2, "Mar" => 3, "Apr" => 4,
+        "May" => 5, "Jun" => 6, "Jul" => 7, "Aug" => 8,
+        "Sep" => 9, "Oct" => 10, "Nov" => 11, "Dec" => 12,
+        _ => return None,
+    };
+    let day_num: u32 = day.parse().ok()?;
+
+    let (year, hour, minute) = if time_or_year.contains(':') {
+        // Format "HH:MM" — assume current year
+        let mut parts = time_or_year.split(':');
+        let h: u32 = parts.next()?.parse().ok()?;
+        let m: u32 = parts.next()?.parse().ok()?;
+        // Approximate current year from SystemTime
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?;
+        let approx_year = 1970 + (now.as_secs() / 31_557_600); // ~365.25 days
+        (approx_year as i32, h, m)
+    } else {
+        // Format "2024" — year, no time
+        let y: i32 = time_or_year.parse().ok()?;
+        (y, 0, 0)
+    };
+
+    // Convert to seconds since epoch (simplified, no leap seconds)
+    let mut days: i64 = 0;
+    for y in 1970..year {
+        days += if is_leap_year(y) { 366 } else { 365 };
+    }
+    let month_days = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    for m in 1..month_num {
+        days += month_days[m as usize] as i64;
+        if m == 2 && is_leap_year(year) {
+            days += 1;
+        }
+    }
+    days += (day_num - 1) as i64;
+    let secs = days * 86400 + hour as i64 * 3600 + minute as i64 * 60;
+    UNIX_EPOCH.checked_add(Duration::from_secs(secs as u64))
+}
+
+fn is_leap_year(y: i32) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+}
+
+/// Parse "rwxr-xr-x" style permission string to octal mode (e.g. 0o755)
+fn parse_perm_string(perms: &str) -> Option<u32> {
+    let chars: Vec<char> = perms.chars().collect();
+    if chars.len() < 10 {
+        return None;
+    }
+    let triplet = |r: char, w: char, x: char| -> u32 {
+        (if r != '-' { 4 } else { 0 })
+            + (if w != '-' { 2 } else { 0 })
+            + (if x != '-' && x != 's' && x != 'S' && x != 't' && x != 'T' { 1 } else { 0 })
+            + (if x == 's' || x == 't' { 1 } else { 0 })
+    };
+    let owner = triplet(chars[1], chars[2], chars[3]);
+    let group = triplet(chars[4], chars[5], chars[6]);
+    let other = triplet(chars[7], chars[8], chars[9]);
+    Some(owner * 64 + group * 8 + other)
+}
 
 pub struct FtpBackend {
     ftp: Mutex<FtpStream>,
     display: String,
+    params: ConnectionParams,
 }
 
 // Safety: FtpStream is not Sync but we protect it with Mutex
@@ -30,6 +96,14 @@ impl FtpBackend {
         Ok(Self {
             display: format!("FTP: {}@{}:{}", username, host, port),
             ftp: Mutex::new(ftp),
+            params: ConnectionParams {
+                protocol: ConnectionProtocol::Ftp,
+                host: host.to_string(),
+                port,
+                username: username.to_string(),
+                password: password.to_string(),
+                key_path: None,
+            },
         })
     }
 }
@@ -61,6 +135,15 @@ pub fn parse_list_line(line: &str) -> Option<DirEntry> {
         name
     };
 
+    // Parse modification date from LIST output
+    let modified = parse_ftp_date(parts[5], parts[6], parts[7]);
+
+    // Parse readonly from owner write bit (position 2 in permission string)
+    let readonly = perms.chars().nth(2) == Some('-');
+
+    // Parse permission string to octal mode
+    let mode = parse_perm_string(perms);
+
     Some(DirEntry {
         name: clean_name.clone(),
         info: FileInfo {
@@ -69,8 +152,9 @@ pub fn parse_list_line(line: &str) -> Option<DirEntry> {
             is_file,
             is_symlink,
             size,
-            modified: None,
-            readonly: false,
+            modified,
+            readonly,
+            mode,
         },
     })
 }
@@ -98,19 +182,21 @@ impl FilesystemBackend for FtpBackend {
     }
 
     fn metadata(&self, path: &str) -> io::Result<FileInfo> {
-        // Try to get size (works for files)
+        // Get accurate metadata by listing the parent directory and finding our entry
+        let name = path.rsplit('/').next().unwrap_or(path).to_string();
+        let parent = self.parent_path(path).unwrap_or_else(|| "/".to_string());
+
+        let entries = self.list_dir(&parent)?;
+        if let Some(entry) = entries.into_iter().find(|e| e.name == name) {
+            return Ok(entry.info);
+        }
+
+        // Fallback: might be a directory not found in listing (e.g., root)
         let mut ftp = self.ftp.lock()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-
-        let size = ftp.size(path).unwrap_or(0);
-
-        // Try to determine if directory by listing parent
-        let name = path.rsplit('/').next().unwrap_or(path).to_string();
-
-        // Try cwd to check if it's a directory
         let is_dir = if let Ok(pwd) = ftp.pwd() {
             if ftp.cwd(path).is_ok() {
-                let _ = ftp.cwd(&pwd); // restore
+                let _ = ftp.cwd(&pwd);
                 true
             } else {
                 false
@@ -124,9 +210,10 @@ impl FilesystemBackend for FtpBackend {
             is_dir,
             is_file: !is_dir,
             is_symlink: false,
-            size: size as u64,
+            size: 0,
             modified: None,
             readonly: false,
+            mode: None,
         })
     }
 
@@ -269,5 +356,31 @@ impl FilesystemBackend for FtpBackend {
     fn file_name(&self, path: &str) -> Option<String> {
         let path = path.trim_end_matches('/');
         path.rsplit('/').next().map(|s| s.to_string())
+    }
+
+    fn disconnect(&self) {
+        if let Ok(mut ftp) = self.ftp.lock() {
+            let _ = ftp.quit();
+        }
+    }
+
+    fn chmod(&self, path: &str, mode: u32) -> io::Result<()> {
+        let mut ftp = self.ftp.lock()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        ftp.site(&format!("CHMOD {:o} {}", mode, path))
+            .map(|_| ())
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    }
+
+    fn is_connected(&self) -> bool {
+        if let Ok(mut ftp) = self.ftp.lock() {
+            ftp.noop().is_ok()
+        } else {
+            false
+        }
+    }
+
+    fn connection_params(&self) -> Option<ConnectionParams> {
+        Some(self.params.clone())
     }
 }

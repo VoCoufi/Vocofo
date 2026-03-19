@@ -10,4 +10,6 @@ pub mod ftp_backend;
 pub mod local_backend;
 pub mod messages_enum;
 #[cfg(feature = "sftp")]
+pub mod scp_backend;
+#[cfg(feature = "sftp")]
 pub mod sftp_backend;

@@ -122,6 +122,15 @@ pub fn format_item_details_from_info(info: &FileInfo) -> String {
     }
 }
 
+/// RAII guard that removes a temp file on drop (even on panic/early return)
+struct TempFileGuard(PathBuf);
+
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
 /// Opens a file using the appropriate backend
 pub fn open_file_with_backend(backend: &Arc<dyn FilesystemBackend>, path: &str) -> FileResult<()> {
     if backend.is_local() {
@@ -134,11 +143,11 @@ pub fn open_file_with_backend(backend: &Arc<dyn FilesystemBackend>, path: &str) 
         let file_name = backend.file_name(path).unwrap_or_else(|| "tempfile".to_string());
         let tmp_path = tmp_dir.join(&file_name);
         fs::write(&tmp_path, &data)?;
+        let _guard = TempFileGuard(tmp_path.clone());
         edit::edit_file(&tmp_path)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let modified = fs::read(&tmp_path)?;
         backend.write_file(path, &modified)?;
-        let _ = fs::remove_file(&tmp_path);
         Ok(())
     }
 }
