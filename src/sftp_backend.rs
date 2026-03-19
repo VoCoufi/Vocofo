@@ -35,32 +35,27 @@ impl SftpBackend {
             .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e.to_string()))?;
         session.set_timeout(30_000);
 
-        // Try key-based auth first, then password
-        let mut authenticated = false;
+        // Try auth methods in order: key, password, ssh-agent
+        // 1. Key-based auth (if key provided)
         if let Some(key) = key_path {
             let passphrase = if password.is_empty() { None } else { Some(password) };
-            if session.userauth_pubkey_file(username, None, Path::new(key), passphrase).is_ok() {
-                authenticated = true;
-            }
+            let _ = session.userauth_pubkey_file(username, None, Path::new(key), passphrase);
         }
-        if !authenticated && !password.is_empty() {
-            session.userauth_password(username, password)
-                .map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e.to_string()))?;
+
+        // 2. Password auth (if not yet authenticated and password provided)
+        if !session.authenticated() && !password.is_empty() {
+            let _ = session.userauth_password(username, password);
         }
-        if !authenticated && password.is_empty() && key_path.is_none() {
-            // Try ssh-agent
-            if session.userauth_agent(username).is_err() {
-                return Err(io::Error::new(
-                    io::ErrorKind::PermissionDenied,
-                    "No authentication method succeeded",
-                ));
-            }
+
+        // 3. SSH agent (if nothing else worked)
+        if !session.authenticated() {
+            let _ = session.userauth_agent(username);
         }
 
         if !session.authenticated() {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
-                "Authentication failed",
+                "Authentication failed — tried key, password, and ssh-agent",
             ));
         }
 
