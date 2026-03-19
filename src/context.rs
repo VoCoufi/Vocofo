@@ -294,8 +294,8 @@ impl CommandPaletteState {
     }
 }
 
-// ConnectionProtocol and ConnectionParams are defined in backend.rs
-pub use crate::backend::{ConnectionParams, ConnectionProtocol};
+// ConnectionProtocol is defined in backend.rs
+pub use crate::backend::ConnectionProtocol;
 
 /// State for the connection dialog
 #[derive(Debug, Clone)]
@@ -369,6 +369,7 @@ pub struct Context {
 }
 
 impl Context {
+    #[allow(dead_code)] // Used in tests
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         Self::with_config(Config::default())
     }

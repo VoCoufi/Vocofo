@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 use ssh2::Session;
 
-use crate::backend::{ConnectionParams, ConnectionProtocol, DirEntry, FileInfo, FilesystemBackend};
+use crate::backend::{ConnectionParams, DirEntry, FileInfo, FilesystemBackend};
 #[cfg(feature = "ftp")]
 use crate::ftp_backend::parse_list_line;
 

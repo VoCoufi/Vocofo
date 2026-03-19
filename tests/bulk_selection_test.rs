@@ -1,8 +1,11 @@
 use std::fs;
+use std::sync::Arc;
 use tempfile::TempDir;
+use vocofo::backend::FilesystemBackend;
 use vocofo::background_op;
 use vocofo::context::Context;
 use vocofo::file_operation;
+use vocofo::local_backend::LocalBackend;
 
 fn create_bulk_context() -> (Context, TempDir) {
     let temp_dir = TempDir::new().unwrap();
@@ -167,7 +170,9 @@ fn test_batch_delete() {
         base.join("b.txt"),
     ];
 
-    let rx = background_op::spawn_delete_batch(paths, "test delete".to_string());
+    let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
+    let paths_str: Vec<String> = paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
+    let rx = background_op::spawn_delete_batch_with_backend(backend, paths_str, "test delete".to_string());
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
 
@@ -198,7 +203,14 @@ fn test_batch_copy() {
         (src.join("b.txt"), dst.join("b.txt")),
     ];
 
-    let rx = background_op::spawn_copy_batch(items, "test copy".to_string(), false);
+    let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
+    let items_str: Vec<(String, String)> = items.iter()
+        .map(|(f, t)| (f.to_string_lossy().to_string(), t.to_string_lossy().to_string()))
+        .collect();
+    let rx = background_op::spawn_copy_batch_with_backend(
+        Arc::clone(&backend), Arc::clone(&backend),
+        items_str, "test copy".to_string(), false, None,
+    );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
     assert!(!result.clear_clipboard);
@@ -225,7 +237,14 @@ fn test_batch_move() {
         (src.join("a.txt"), dst.join("a.txt")),
     ];
 
-    let rx = background_op::spawn_copy_batch(items, "test move".to_string(), true);
+    let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
+    let items_str: Vec<(String, String)> = items.iter()
+        .map(|(f, t)| (f.to_string_lossy().to_string(), t.to_string_lossy().to_string()))
+        .collect();
+    let rx = background_op::spawn_copy_batch_with_backend(
+        Arc::clone(&backend), Arc::clone(&backend),
+        items_str, "test move".to_string(), true, None,
+    );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
     assert!(result.clear_clipboard);

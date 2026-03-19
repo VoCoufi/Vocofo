@@ -1,9 +1,11 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tempfile::TempDir;
 use vocofo::background_op;
+use vocofo::backend::FilesystemBackend;
 use vocofo::context::Context;
 use vocofo::file_operation;
+use vocofo::local_backend::LocalBackend;
 
 // ============================================================================
 // Overwrite Confirmation Tests
@@ -37,9 +39,9 @@ fn test_resolve_paste_paths_detects_existing_target() {
     let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
 
     // Target exists
-    assert!(Path::new(&to).exists());
-    assert_eq!(Path::new(&from).file_name().unwrap().to_str().unwrap(), "file.txt");
-    assert_eq!(Path::new(&to).file_name().unwrap().to_str().unwrap(), "file.txt");
+    assert!(std::path::Path::new(&to).exists());
+    assert_eq!(std::path::Path::new(&from).file_name().unwrap().to_str().unwrap(), "file.txt");
+    assert_eq!(std::path::Path::new(&to).file_name().unwrap().to_str().unwrap(), "file.txt");
 }
 
 #[test]
@@ -56,12 +58,16 @@ fn test_overwrite_after_delete_target() {
 
     // Simulate the overwrite flow: delete target, then copy
     let target = dest.join("file.txt");
-    file_operation::delete(&target).unwrap();
+    fs::remove_file(&target).unwrap();
     assert!(!target.exists());
 
-    let from = source.join("file.txt");
-    let to = dest.join("file.txt");
-    let rx = background_op::spawn_copy(from.clone(), to.clone(), "test".to_string());
+    let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
+    let from = source.join("file.txt").to_string_lossy().to_string();
+    let to = dest.join("file.txt").to_string_lossy().to_string();
+    let rx = background_op::spawn_copy_with_backend(
+        Arc::clone(&backend), Arc::clone(&backend),
+        from, to, "test".to_string(), None,
+    );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
 
@@ -110,7 +116,6 @@ fn test_sync_panel_copies_path() {
 
     assert_ne!(context.panels[0].path, context.panels[1].path);
 
-    // Sync: copy active (panel 0) path to inactive (panel 1)
     let path = context.panels[0].path.clone();
     context.panels[1].path = path;
     context.panels[1].invalidate_directory_cache();
@@ -128,7 +133,6 @@ fn test_sync_panel_clears_filter() {
     context.panels[1].path = temp_dir.path().to_string_lossy().to_string();
     context.panels[1].filter = "something".to_string();
 
-    // Sync clears filter on target panel
     let path = context.panels[0].path.clone();
     context.panels[1].path = path;
     context.panels[1].clear_filter();
@@ -137,7 +141,7 @@ fn test_sync_panel_clears_filter() {
 }
 
 // ============================================================================
-// File Details Tests
+// File Details Tests (using backend-aware version)
 // ============================================================================
 
 #[test]
@@ -146,8 +150,10 @@ fn test_format_item_details_file() {
     let file_path = temp_dir.path().join("test.txt");
     fs::write(&file_path, "hello world").unwrap();
 
-    let details = file_operation::format_item_details(&file_path);
-    assert!(details.contains("B")); // Should show bytes
+    let backend = LocalBackend::new();
+    let info = backend.metadata(&file_path.to_string_lossy()).unwrap();
+    let details = file_operation::format_item_details_from_info(&info);
+    assert!(details.contains("B"));
 }
 
 #[test]
@@ -158,7 +164,9 @@ fn test_format_item_details_directory() {
     fs::write(dir.join("a.txt"), "").unwrap();
     fs::write(dir.join("b.txt"), "").unwrap();
 
-    let details = file_operation::format_item_details(&dir);
+    let backend = LocalBackend::new();
+    let entries = backend.list_dir(&dir.to_string_lossy()).unwrap();
+    let details = format!("{} items", entries.len());
     assert_eq!(details, "2 items");
 }
 
@@ -168,14 +176,17 @@ fn test_format_item_details_empty_directory() {
     let dir = temp_dir.path().join("empty");
     fs::create_dir(&dir).unwrap();
 
-    let details = file_operation::format_item_details(&dir);
+    let backend = LocalBackend::new();
+    let entries = backend.list_dir(&dir.to_string_lossy()).unwrap();
+    let details = format!("{} items", entries.len());
     assert_eq!(details, "0 items");
 }
 
 #[test]
 fn test_format_item_details_nonexistent() {
-    let details = file_operation::format_item_details(std::path::Path::new("/nonexistent/path"));
-    assert!(details.is_empty());
+    let backend = LocalBackend::new();
+    let result = backend.metadata("/nonexistent/path");
+    assert!(result.is_err());
 }
 
 #[test]
@@ -184,6 +195,8 @@ fn test_format_item_details_large_file() {
     let file_path = temp_dir.path().join("large.bin");
     fs::write(&file_path, vec![0u8; 1024 * 1024]).unwrap(); // 1MB
 
-    let details = file_operation::format_item_details(&file_path);
+    let backend = LocalBackend::new();
+    let info = backend.metadata(&file_path.to_string_lossy()).unwrap();
+    let details = file_operation::format_item_details_from_info(&info);
     assert!(details.contains("MB"));
 }

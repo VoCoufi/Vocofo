@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
 use vocofo::backend::FilesystemBackend;
@@ -214,7 +213,11 @@ fn test_cross_panel_copy_paste() {
 
     // Paste via background op
     let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
-    let rx = background_op::spawn_copy(PathBuf::from(&from), PathBuf::from(&to), "test".to_string());
+    let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
+    let rx = background_op::spawn_copy_with_backend(
+        Arc::clone(&backend), Arc::clone(&backend),
+        from, to, "test".to_string(), None,
+    );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
 
@@ -239,7 +242,11 @@ fn test_cross_panel_cut_move() {
 
     // Move via background op (copy + delete)
     let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
-    let rx = background_op::spawn_move(PathBuf::from(&from), PathBuf::from(&to), "test".to_string());
+    let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
+    let rx = background_op::spawn_move_with_backend(
+        Arc::clone(&backend), Arc::clone(&backend),
+        from, to, "test".to_string(), None,
+    );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
 
