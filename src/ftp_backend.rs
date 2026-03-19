@@ -35,7 +35,7 @@ impl FtpBackend {
 }
 
 /// Parse a unix-style FTP LIST line into a DirEntry
-fn parse_list_line(line: &str) -> Option<DirEntry> {
+pub fn parse_list_line(line: &str) -> Option<DirEntry> {
     // Format: drwxr-xr-x 2 user group 4096 Jan 01 12:00 filename
     let parts: Vec<&str> = line.split_whitespace().collect();
     if parts.len() < 9 {
