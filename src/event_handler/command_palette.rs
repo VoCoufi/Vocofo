@@ -11,29 +11,36 @@ pub struct PaletteAction {
     pub label: &'static str,
     pub shortcut: &'static str,
     pub id: &'static str,
+    pub section: &'static str,
 }
 
 /// All available actions for the command palette
 pub const PALETTE_ACTIONS: &[PaletteAction] = &[
-    PaletteAction { id: "delete", label: "Delete", shortcut: "Del" },
-    PaletteAction { id: "rename", label: "Rename", shortcut: "^R" },
-    PaletteAction { id: "copy", label: "Copy", shortcut: "^C" },
-    PaletteAction { id: "paste", label: "Paste", shortcut: "^V" },
-    PaletteAction { id: "cut", label: "Cut", shortcut: "^X" },
-    PaletteAction { id: "chmod", label: "Change Permissions", shortcut: "^M" },
-    PaletteAction { id: "new_file", label: "New File", shortcut: "^N" },
-    PaletteAction { id: "new_folder", label: "New Folder", shortcut: "^P" },
-    PaletteAction { id: "connect", label: "Connect (SFTP/FTP)", shortcut: "F5" },
-    PaletteAction { id: "disconnect", label: "Disconnect", shortcut: "F6" },
-    PaletteAction { id: "bookmarks", label: "Bookmarks", shortcut: "F7" },
-    PaletteAction { id: "settings", label: "Settings", shortcut: "F2" },
-    PaletteAction { id: "toggle_hidden", label: "Toggle Hidden Files", shortcut: "." },
-    PaletteAction { id: "toggle_preview", label: "Toggle Preview", shortcut: "F3" },
-    PaletteAction { id: "sync_panels", label: "Sync Panels", shortcut: "=" },
-    PaletteAction { id: "select_all", label: "Select All", shortcut: "^A" },
-    PaletteAction { id: "deselect", label: "Deselect All", shortcut: "^D" },
-    PaletteAction { id: "search", label: "Search / Filter", shortcut: "/" },
-    PaletteAction { id: "quit", label: "Quit", shortcut: "Q" },
+    // File Operations
+    PaletteAction { id: "delete", label: "Delete", shortcut: "Del", section: "File Operations" },
+    PaletteAction { id: "rename", label: "Rename", shortcut: "^R", section: "File Operations" },
+    PaletteAction { id: "copy", label: "Copy", shortcut: "^C", section: "File Operations" },
+    PaletteAction { id: "paste", label: "Paste", shortcut: "^V", section: "File Operations" },
+    PaletteAction { id: "cut", label: "Cut", shortcut: "^X", section: "File Operations" },
+    PaletteAction { id: "chmod", label: "Change Permissions", shortcut: "^M", section: "File Operations" },
+    // Create
+    PaletteAction { id: "new_file", label: "New File", shortcut: "^N", section: "Create" },
+    PaletteAction { id: "new_folder", label: "New Folder", shortcut: "^P", section: "Create" },
+    // Remote
+    PaletteAction { id: "connect", label: "Connect (SFTP/FTP)", shortcut: "F5", section: "Remote" },
+    PaletteAction { id: "disconnect", label: "Disconnect", shortcut: "F6", section: "Remote" },
+    PaletteAction { id: "bookmarks", label: "Bookmarks", shortcut: "F7", section: "Remote" },
+    // View
+    PaletteAction { id: "toggle_hidden", label: "Toggle Hidden Files", shortcut: ".", section: "View" },
+    PaletteAction { id: "toggle_preview", label: "Toggle Preview", shortcut: "F3", section: "View" },
+    PaletteAction { id: "sync_panels", label: "Sync Panels", shortcut: "=", section: "View" },
+    PaletteAction { id: "search", label: "Search / Filter", shortcut: "/", section: "View" },
+    // Selection
+    PaletteAction { id: "select_all", label: "Select All", shortcut: "^A", section: "Selection" },
+    PaletteAction { id: "deselect", label: "Deselect All", shortcut: "^D", section: "Selection" },
+    // App
+    PaletteAction { id: "settings", label: "Settings", shortcut: "F2", section: "App" },
+    PaletteAction { id: "quit", label: "Quit", shortcut: "Q", section: "App" },
 ];
 
 /// Handles key events for the command palette

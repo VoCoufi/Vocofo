@@ -226,33 +226,54 @@ pub fn popup_command_palette(frame: &mut Frame, context: &mut Context) -> Render
         chunks[1],
     );
 
+    // Build all lines with section headers inserted
+    let label_width = chunks[2].width.saturating_sub(10) as usize;
+    let mut all_lines: Vec<Line> = Vec::new();
+    let mut selected_line_idx: usize = 0;
+    let mut last_section = "";
+    let is_filtered = !state.filter.is_empty();
+
+    for (sel_idx, &action_idx) in state.filtered_indices.iter().enumerate() {
+        let action = &PALETTE_ACTIONS[action_idx];
+
+        // Insert section header when section changes (only when not filtering)
+        if !is_filtered && action.section != last_section {
+            last_section = action.section;
+            all_lines.push(Line::from(vec![
+                Span::styled(format!(" {}", action.section), Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
+            ]));
+        }
+
+        if sel_idx == state.selected {
+            selected_line_idx = all_lines.len();
+        }
+
+        let padded_label = format!("   {:<width$}", action.label, width = label_width.saturating_sub(2));
+        let is_selected = sel_idx == state.selected;
+        let (style, shortcut_style) = if is_selected {
+            (Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD),
+             Style::default().bg(Color::Blue).fg(Color::Gray))
+        } else {
+            (Style::default().fg(Color::White), Style::default().fg(Color::DarkGray))
+        };
+        all_lines.push(Line::from(vec![
+            Span::styled(padded_label, style),
+            Span::styled(format!("{:>6} ", action.shortcut), shortcut_style),
+        ]));
+    }
+
+    // Scroll to keep selected visible
     let max_visible = chunks[2].height as usize;
-    let scroll_offset = if state.selected >= max_visible {
-        state.selected - max_visible + 1
+    let scroll_offset = if selected_line_idx >= max_visible {
+        selected_line_idx - max_visible + 1
     } else {
         0
     };
 
-    let items: Vec<Line> = state.filtered_indices.iter()
+    let items: Vec<Line> = all_lines.into_iter()
         .skip(scroll_offset)
         .take(max_visible)
-        .enumerate()
-        .map(|(i, &action_idx)| {
-            let action = &PALETTE_ACTIONS[action_idx];
-            let label_width = chunks[2].width.saturating_sub(10) as usize;
-            let padded_label = format!(" {:<width$}", action.label, width = label_width);
-            let is_selected = i + scroll_offset == state.selected;
-            let (style, shortcut_style) = if is_selected {
-                (Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD),
-                 Style::default().bg(Color::Blue).fg(Color::Gray))
-            } else {
-                (Style::default().fg(Color::White), Style::default().fg(Color::DarkGray))
-            };
-            Line::from(vec![
-                Span::styled(padded_label, style),
-                Span::styled(format!("{:>6} ", action.shortcut), shortcut_style),
-            ])
-        }).collect();
+        .collect();
 
     if items.is_empty() {
         frame.render_widget(
