@@ -608,10 +608,15 @@ fn attempt_connection(context: &mut Context) {
         return;
     }
 
-    let port: u16 = dialog.port.parse().unwrap_or(match dialog.protocol {
-        ConnectionProtocol::Sftp => 22,
-        ConnectionProtocol::Ftp => 21,
-    });
+    let port: u16 = match dialog.port.parse::<u16>() {
+        Ok(0) | Err(_) => {
+            if let Some(d) = context.connect_dialog.as_mut() {
+                d.error_message = Some("Invalid port number".to_string());
+            }
+            return;
+        }
+        Ok(p) => p,
+    };
 
     let result: Result<Arc<dyn crate::backend::FilesystemBackend>, String> = match dialog.protocol {
         ConnectionProtocol::Sftp => {

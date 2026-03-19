@@ -90,6 +90,10 @@ impl FtpBackend {
     ) -> io::Result<Self> {
         let mut ftp = FtpStream::connect(format!("{}:{}", host, port))
             .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e.to_string()))?;
+        // Set 30 second timeout for read/write operations
+        let timeout = Some(Duration::from_secs(30));
+        let _ = ftp.get_ref().set_read_timeout(timeout);
+        let _ = ftp.get_ref().set_write_timeout(timeout);
         ftp.login(username, password)
             .map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e.to_string()))?;
 
@@ -218,18 +222,17 @@ impl FilesystemBackend for FtpBackend {
     }
 
     fn exists(&self, path: &str) -> io::Result<bool> {
-        // Try size (file) or cwd (dir)
         let mut ftp = self.ftp.lock()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
         if ftp.size(path).is_ok() {
             return Ok(true);
         }
-        if let Ok(pwd) = ftp.pwd() {
-            if ftp.cwd(path).is_ok() {
-                let _ = ftp.cwd(&pwd);
-                return Ok(true);
-            }
+        let pwd = ftp.pwd()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        if ftp.cwd(path).is_ok() {
+            let _ = ftp.cwd(&pwd);
+            return Ok(true);
         }
         Ok(false)
     }
@@ -238,14 +241,15 @@ impl FilesystemBackend for FtpBackend {
         let mut ftp = self.ftp.lock()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-        // Navigate to path and get absolute path
         let original = ftp.pwd()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
         ftp.cwd(path)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
         let real = ftp.pwd()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-        let _ = ftp.cwd(&original);
+        ftp.cwd(&original)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other,
+                format!("Failed to restore FTP directory: {}", e)))?;
         Ok(real)
     }
 

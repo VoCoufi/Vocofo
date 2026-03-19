@@ -131,6 +131,7 @@ pub fn spawn_delete_batch_with_backend(
 ) -> mpsc::Receiver<FileOpResult> {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
+        let total = paths.len();
         let mut errors = Vec::new();
         for path in &paths {
             if let Err(e) = file_operation::delete_with_backend(&backend, path) {
@@ -140,7 +141,8 @@ pub fn spawn_delete_batch_with_backend(
         let result = if errors.is_empty() {
             Ok(())
         } else {
-            Err(errors.join(", "))
+            let failed = errors.len();
+            Err(format!("{} of {} failed: {}", failed, total, errors.join("; ")))
         };
         let _ = tx.send(FileOpResult {
             description,
@@ -201,7 +203,9 @@ pub fn spawn_copy_batch_with_backend(
         let result = if errors.is_empty() {
             Ok(())
         } else {
-            Err(errors.join(", "))
+            let failed = errors.len();
+            let total = items.len();
+            Err(format!("{} of {} failed: {}", failed, total, errors.join("; ")))
         };
         let _ = tx.send(FileOpResult {
             description,
@@ -269,26 +273,11 @@ fn cross_backend_copy_with_progress(
             cross_backend_copy_with_progress(src, dst, &src_child, &dst_child, progress)?;
         }
     } else {
-        // For files: read in chunks if large, update progress
-        const CHUNK_SIZE: usize = 256 * 1024; // 256KB chunks
-
-        if info.size <= CHUNK_SIZE as u64 {
-            // Small file: single read/write
-            let data = src.read_file(from, usize::MAX)?;
-            let len = data.len() as u64;
-            dst.write_file(to, &data)?;
-            if let Some(p) = progress {
-                p.bytes_transferred.fetch_add(len, Ordering::Relaxed);
-            }
-        } else {
-            // Large file: still full read (chunked transfer requires backend API changes)
-            // but track progress
-            let data = src.read_file(from, usize::MAX)?;
-            let len = data.len() as u64;
-            dst.write_file(to, &data)?;
-            if let Some(p) = progress {
-                p.bytes_transferred.fetch_add(len, Ordering::Relaxed);
-            }
+        let data = src.read_file(from, info.size as usize)?;
+        let len = data.len() as u64;
+        dst.write_file(to, &data)?;
+        if let Some(p) = progress {
+            p.bytes_transferred.fetch_add(len, Ordering::Relaxed);
         }
     }
 
@@ -333,6 +322,7 @@ pub fn spawn_delete(path: PathBuf, description: String) -> mpsc::Receiver<FileOp
 pub fn spawn_delete_batch(paths: Vec<PathBuf>, description: String) -> mpsc::Receiver<FileOpResult> {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
+        let total = paths.len();
         let mut errors = Vec::new();
         for path in &paths {
             if let Err(e) = file_operation::delete(path) {
@@ -342,7 +332,8 @@ pub fn spawn_delete_batch(paths: Vec<PathBuf>, description: String) -> mpsc::Rec
         let result = if errors.is_empty() {
             Ok(())
         } else {
-            Err(errors.join(", "))
+            let failed = errors.len();
+            Err(format!("{} of {} failed: {}", failed, total, errors.join("; ")))
         };
         let _ = tx.send(FileOpResult {
             description,
@@ -357,6 +348,7 @@ pub fn spawn_delete_batch(paths: Vec<PathBuf>, description: String) -> mpsc::Rec
 pub fn spawn_copy_batch(items: Vec<(PathBuf, PathBuf)>, description: String, is_move: bool) -> mpsc::Receiver<FileOpResult> {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
+        let total = items.len();
         let mut errors = Vec::new();
         for (from, to) in &items {
             if let Err(e) = copy_standalone(from, to) {
@@ -372,7 +364,8 @@ pub fn spawn_copy_batch(items: Vec<(PathBuf, PathBuf)>, description: String, is_
         let result = if errors.is_empty() {
             Ok(())
         } else {
-            Err(errors.join(", "))
+            let failed = errors.len();
+            Err(format!("{} of {} failed: {}", failed, total, errors.join("; ")))
         };
         let _ = tx.send(FileOpResult {
             description,

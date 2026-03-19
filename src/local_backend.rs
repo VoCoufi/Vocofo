@@ -93,7 +93,9 @@ impl FilesystemBackend for LocalBackend {
 
     fn read_file(&self, path: &str, max_bytes: usize) -> io::Result<Vec<u8>> {
         let mut file = fs::File::open(path)?;
-        let mut buffer = vec![0u8; max_bytes];
+        let meta = file.metadata()?;
+        let size = (meta.len() as usize).min(max_bytes);
+        let mut buffer = vec![0u8; size];
         let bytes_read = file.read(&mut buffer)?;
         buffer.truncate(bytes_read);
         Ok(buffer)

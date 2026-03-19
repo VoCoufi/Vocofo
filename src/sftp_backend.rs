@@ -86,11 +86,13 @@ fn filestat_to_fileinfo(name: &str, stat: &ssh2::FileStat) -> FileInfo {
     let modified = stat.mtime.map(|t| UNIX_EPOCH + std::time::Duration::from_secs(t));
     let readonly = stat.perm.map(|p| p & 0o200 == 0).unwrap_or(false);
 
+    let is_symlink = stat.perm.map(|p| (p & 0o170000) == 0o120000).unwrap_or(false);
+
     FileInfo {
         name: name.to_string(),
         is_dir,
         is_file,
-        is_symlink: false,
+        is_symlink,
         size,
         modified,
         readonly,
