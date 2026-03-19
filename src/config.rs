@@ -94,8 +94,11 @@ impl Default for GeneralConfig {
 
 impl Config {
     pub fn load() -> Self {
-        let config_path = config_file_path();
-        match fs::read_to_string(&config_path) {
+        Self::load_from(&config_file_path())
+    }
+
+    pub fn load_from(path: &PathBuf) -> Self {
+        match fs::read_to_string(path) {
             Ok(content) => {
                 toml::from_str(&content).unwrap_or_default()
             }

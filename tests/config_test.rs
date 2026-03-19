@@ -19,7 +19,8 @@ fn test_config_default() {
 #[test]
 fn test_config_load_missing_file() {
     // Should return defaults when config file doesn't exist
-    let config = Config::load();
+    let nonexistent = std::path::PathBuf::from("/tmp/vocofo_test_nonexistent_config.toml");
+    let config = Config::load_from(&nonexistent);
     assert!(!config.general.show_hidden);
     assert_eq!(config.general.default_path, ".");
 }
