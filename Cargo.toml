@@ -9,6 +9,7 @@ readme = "README.md"
 keywords = ["file-manager", "tui", "terminal", "sftp", "ftp"]
 categories = ["command-line-utilities", "filesystem"]
 rust-version = "1.85"
+exclude = ["CLAUDE.md", ".claude/"]
 
 [features]
 default = ["sftp", "ftp"]

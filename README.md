@@ -36,7 +36,23 @@ cargo install vocofo
 
 ### From Source
 
-**Prerequisites:** Rust 1.85+ ([rustup.rs](https://rustup.rs/))
+**Prerequisites:**
+- Rust 1.85+ ([rustup.rs](https://rustup.rs/))
+- `libssh2` and `openssl` dev libraries (for SFTP support)
+
+```bash
+# Debian/Ubuntu
+sudo apt install libssh2-1-dev libssl-dev pkg-config
+
+# Fedora
+sudo dnf install libssh2-devel openssl-devel
+
+# Arch
+sudo pacman -S libssh2 openssl
+
+# macOS (via Homebrew)
+brew install libssh2 openssl
+```
 
 ```bash
 git clone https://gitlab.com/Coufik/Vocofo.git
