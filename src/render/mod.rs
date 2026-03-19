@@ -4,8 +4,8 @@ mod popups;
 pub use panels::render_panel;
 pub use popups::*;
 
-use ratatui::prelude::*;
 use ratatui::layout::Alignment;
+use ratatui::prelude::*;
 use ratatui::style::Style;
 use ratatui::widgets::*;
 
@@ -32,7 +32,7 @@ pub(crate) fn create_sized_button(text: &str, selected: bool) -> Paragraph<'_> {
                 .borders(Borders::ALL)
                 .border_style(border_style)
                 .title_alignment(Alignment::Center)
-                .padding(Padding::new(1, 1, 0, 0))
+                .padding(Padding::new(1, 1, 0, 0)),
         )
         .alignment(Alignment::Center)
         .style(style)

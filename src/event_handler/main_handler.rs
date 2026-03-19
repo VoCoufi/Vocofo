@@ -96,10 +96,14 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
             if let Some(item) = context.active().get_selected_item() {
                 if item != "../" {
                     let name = item.trim_end_matches('/').to_string();
-                    let path = context.active().backend.join_path(&context.active().path, &name);
+                    let path = context
+                        .active()
+                        .backend
+                        .join_path(&context.active().path, &name);
                     match context.active().backend.metadata(&path) {
                         Ok(info) => {
-                            let current_mode = info.mode
+                            let current_mode = info
+                                .mode
                                 .map(|m| format!("{:o}", m & 0o7777))
                                 .unwrap_or_else(|| "644".to_string());
                             context.set_input(current_mode);
@@ -153,7 +157,9 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
                 context.active().backend.disconnect();
                 let local_backend: Arc<dyn crate::backend::FilesystemBackend> =
                     Arc::new(crate::local_backend::LocalBackend::new());
-                let home = local_backend.canonicalize(".").unwrap_or_else(|_| ".".to_string());
+                let home = local_backend
+                    .canonicalize(".")
+                    .unwrap_or_else(|_| ".".to_string());
                 context.active_mut().backend = local_backend;
                 context.active_mut().path = home;
                 context.active_mut().invalidate_directory_cache();
@@ -168,18 +174,30 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
                 context.set_ui_state(UiState::BookmarkList);
             }
         }
-        (KeyCode::PageDown, _) => { context.active_mut().page_down(); }
-        (KeyCode::PageUp, _) => { context.active_mut().page_up(); }
-        (KeyCode::Home, _) => { context.active_mut().go_to_first(); }
-        (KeyCode::End, _) => { context.active_mut().go_to_last(); }
+        (KeyCode::PageDown, _) => {
+            context.active_mut().page_down();
+        }
+        (KeyCode::PageUp, _) => {
+            context.active_mut().page_up();
+        }
+        (KeyCode::Home, _) => {
+            context.active_mut().go_to_first();
+        }
+        (KeyCode::End, _) => {
+            context.active_mut().go_to_last();
+        }
         // Vim-style navigation
         (KeyCode::Char('j'), _) => {
             let panel = context.active_mut();
-            if panel.filtered_items.len() > panel.state + 1 { panel.increment_state(); }
+            if panel.filtered_items.len() > panel.state + 1 {
+                panel.increment_state();
+            }
         }
         (KeyCode::Char('k'), _) => {
             let panel = context.active_mut();
-            if panel.state > 0 { panel.decrease_state(); }
+            if panel.state > 0 {
+                panel.decrease_state();
+            }
         }
         (KeyCode::Char('l'), _) => {
             if let Some(err) = context.active_mut().open_item() {
@@ -194,8 +212,12 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
             }
             context.active_mut().clear_filter();
         }
-        (KeyCode::Char('G'), _) => { context.active_mut().go_to_last(); }
-        (KeyCode::Char('g'), _) => { context.pending_g = true; }
+        (KeyCode::Char('G'), _) => {
+            context.active_mut().go_to_last();
+        }
+        (KeyCode::Char('g'), _) => {
+            context.pending_g = true;
+        }
         (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
             context.set_ui_state(UiState::CreateFilePopup);
         }

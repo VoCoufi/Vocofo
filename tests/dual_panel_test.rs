@@ -79,10 +79,20 @@ fn test_panels_have_independent_items() {
 
     // Left panel should have left_file.txt
     assert!(context.panels[0].items.iter().any(|i| i == "left_file.txt"));
-    assert!(!context.panels[0].items.iter().any(|i| i == "right_file.txt"));
+    assert!(
+        !context.panels[0]
+            .items
+            .iter()
+            .any(|i| i == "right_file.txt")
+    );
 
     // Right panel should have right_file.txt
-    assert!(context.panels[1].items.iter().any(|i| i == "right_file.txt"));
+    assert!(
+        context.panels[1]
+            .items
+            .iter()
+            .any(|i| i == "right_file.txt")
+    );
     assert!(!context.panels[1].items.iter().any(|i| i == "left_file.txt"));
 }
 
@@ -153,7 +163,10 @@ fn test_navigate_to_parent() {
 
     // Path should now be the parent
     let expected = fs::canonicalize(temp_dir.path()).unwrap();
-    assert_eq!(context.panels[0].path, expected.to_string_lossy().to_string());
+    assert_eq!(
+        context.panels[0].path,
+        expected.to_string_lossy().to_string()
+    );
     assert_eq!(context.panels[0].state, 0); // reset to top
 }
 
@@ -199,7 +212,11 @@ fn test_cross_panel_copy_paste() {
     let (mut context, _left, right) = create_dual_panel_context();
 
     // Select left_file.txt in panel 0
-    let file_idx = context.panels[0].items.iter().position(|i| i == "left_file.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "left_file.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
 
     // Copy from panel 0
@@ -215,8 +232,12 @@ fn test_cross_panel_copy_paste() {
     let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
     let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
     let rx = background_op::spawn_copy_with_backend(
-        Arc::clone(&backend), Arc::clone(&backend),
-        from, to, "test".to_string(), None,
+        Arc::clone(&backend),
+        Arc::clone(&backend),
+        from,
+        to,
+        "test".to_string(),
+        None,
     );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
@@ -230,7 +251,11 @@ fn test_cross_panel_cut_move() {
     let (mut context, left, right) = create_dual_panel_context();
 
     // Select left_file.txt in panel 0
-    let file_idx = context.panels[0].items.iter().position(|i| i == "left_file.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "left_file.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
 
     // Cut from panel 0
@@ -244,8 +269,12 @@ fn test_cross_panel_cut_move() {
     let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
     let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
     let rx = background_op::spawn_move_with_backend(
-        Arc::clone(&backend), Arc::clone(&backend),
-        from, to, "test".to_string(), None,
+        Arc::clone(&backend),
+        Arc::clone(&backend),
+        from,
+        to,
+        "test".to_string(),
+        None,
     );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
@@ -282,7 +311,8 @@ fn test_show_preview_toggle() {
 
 #[test]
 fn test_panel_state_new() {
-    let panel = vocofo::context::PanelState::new("/test/path".to_string(), Arc::new(LocalBackend::new()));
+    let panel =
+        vocofo::context::PanelState::new("/test/path".to_string(), Arc::new(LocalBackend::new()));
     assert_eq!(panel.path, "/test/path");
     assert!(panel.items.is_empty());
     assert_eq!(panel.state, 0);

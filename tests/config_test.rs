@@ -64,7 +64,11 @@ fn test_hidden_files_not_shown_by_default() {
 
     assert!(context.panels[0].items.contains(&"visible.txt".to_string()));
     assert!(!context.panels[0].items.contains(&".hidden".to_string()));
-    assert!(!context.panels[0].items.contains(&".hidden_dir/".to_string()));
+    assert!(
+        !context.panels[0]
+            .items
+            .contains(&".hidden_dir/".to_string())
+    );
 }
 
 #[test]
@@ -83,7 +87,11 @@ fn test_hidden_files_shown_when_enabled() {
 
     assert!(context.panels[0].items.contains(&"visible.txt".to_string()));
     assert!(context.panels[0].items.contains(&".hidden".to_string()));
-    assert!(context.panels[0].items.contains(&".hidden_dir/".to_string()));
+    assert!(
+        context.panels[0]
+            .items
+            .contains(&".hidden_dir/".to_string())
+    );
 }
 
 #[test]

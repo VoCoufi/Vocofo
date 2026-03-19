@@ -1,6 +1,6 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
 use std::thread;
 
 use crate::backend::FilesystemBackend;
@@ -46,18 +46,27 @@ pub fn spawn_copy_with_backend(
         }
         let result = if Arc::ptr_eq(&src_backend, &dst_backend) {
             // Same backend: use native copy
-            let info = src_backend.metadata(&from)
+            let info = src_backend
+                .metadata(&from)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>);
             match info {
-                Ok(info) if info.is_dir => src_backend.copy_dir(&from, &to)
+                Ok(info) if info.is_dir => src_backend
+                    .copy_dir(&from, &to)
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
-                Ok(_) => src_backend.copy_file(&from, &to)
+                Ok(_) => src_backend
+                    .copy_file(&from, &to)
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
                 Err(e) => Err(e),
             }
         } else {
             // Cross-backend: read from source, write to destination
-            cross_backend_copy_with_progress(&src_backend, &dst_backend, &from, &to, progress.as_ref())
+            cross_backend_copy_with_progress(
+                &src_backend,
+                &dst_backend,
+                &from,
+                &to,
+                progress.as_ref(),
+            )
         };
         let _ = tx.send(FileOpResult {
             description,
@@ -79,7 +88,8 @@ pub fn spawn_move_with_backend(
 ) -> mpsc::Receiver<FileOpResult> {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
-        let result = move_with_backend_inner(&src_backend, &dst_backend, &from, &to, progress.as_ref());
+        let result =
+            move_with_backend_inner(&src_backend, &dst_backend, &from, &to, progress.as_ref());
         let _ = tx.send(FileOpResult {
             description,
             result: result.map_err(|e| e.to_string()),
@@ -126,7 +136,12 @@ pub fn spawn_delete_batch_with_backend(
             Ok(())
         } else {
             let failed = errors.len();
-            Err(format!("{} of {} failed: {}", failed, total, errors.join("; ")))
+            Err(format!(
+                "{} of {} failed: {}",
+                failed,
+                total,
+                errors.join("; ")
+            ))
         };
         let _ = tx.send(FileOpResult {
             description,
@@ -163,15 +178,25 @@ pub fn spawn_copy_batch_with_backend(
             let copy_result = if Arc::ptr_eq(&src_backend, &dst_backend) {
                 let info = match src_backend.metadata(from) {
                     Ok(i) => i,
-                    Err(e) => { errors.push(format!("{}: {}", from, e)); continue; }
+                    Err(e) => {
+                        errors.push(format!("{}: {}", from, e));
+                        continue;
+                    }
                 };
                 if info.is_dir {
                     src_backend.copy_dir(from, to)
                 } else {
                     src_backend.copy_file(from, to)
-                }.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+                }
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
             } else {
-                cross_backend_copy_with_progress(&src_backend, &dst_backend, from, to, progress.as_ref())
+                cross_backend_copy_with_progress(
+                    &src_backend,
+                    &dst_backend,
+                    from,
+                    to,
+                    progress.as_ref(),
+                )
             };
 
             if let Err(e) = copy_result {
@@ -189,7 +214,12 @@ pub fn spawn_copy_batch_with_backend(
         } else {
             let failed = errors.len();
             let total = items.len();
-            Err(format!("{} of {} failed: {}", failed, total, errors.join("; ")))
+            Err(format!(
+                "{} of {} failed: {}",
+                failed,
+                total,
+                errors.join("; ")
+            ))
         };
         let _ = tx.send(FileOpResult {
             description,
@@ -257,4 +287,3 @@ fn cross_backend_copy_with_progress(
 
     Ok(())
 }
-

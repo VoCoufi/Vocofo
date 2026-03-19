@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 use vocofo::backend::FilesystemBackend;
 use vocofo::context::Context;
-use vocofo::file_operation::{self, list_children, format_size, generate_preview_with_backend};
+use vocofo::file_operation::{self, format_size, generate_preview_with_backend, list_children};
 use vocofo::local_backend::LocalBackend;
 
 /// Helper function to create a test directory structure
@@ -130,11 +130,17 @@ fn test_copy_directory_basic() {
     fs::write(source.join("file.txt"), "content").unwrap();
 
     let b = LocalBackend::new();
-    assert!(b.copy_dir(&source.to_string_lossy(), &dest.to_string_lossy()).is_ok());
+    assert!(
+        b.copy_dir(&source.to_string_lossy(), &dest.to_string_lossy())
+            .is_ok()
+    );
 
     assert!(dest.exists());
     assert!(dest.join("file.txt").exists());
-    assert_eq!(fs::read_to_string(dest.join("file.txt")).unwrap(), "content");
+    assert_eq!(
+        fs::read_to_string(dest.join("file.txt")).unwrap(),
+        "content"
+    );
 }
 
 #[test]
@@ -144,7 +150,10 @@ fn test_copy_directory_recursive() {
     let dest = temp_dir.path().join("folder1_copy");
 
     let b = LocalBackend::new();
-    assert!(b.copy_dir(&source.to_string_lossy(), &dest.to_string_lossy()).is_ok());
+    assert!(
+        b.copy_dir(&source.to_string_lossy(), &dest.to_string_lossy())
+            .is_ok()
+    );
 
     assert!(dest.exists());
     assert!(dest.join("nested_file.txt").exists());
@@ -222,9 +231,24 @@ fn test_list_children_special_characters() {
     context.panels[0].path = base.to_string_lossy().to_string();
 
     assert!(list_children(&mut context.panels[0]).is_ok());
-    assert!(context.panels[0].items.iter().any(|i| i == "file with spaces.txt"));
-    assert!(context.panels[0].items.iter().any(|i| i == "file-with-dashes.txt"));
-    assert!(context.panels[0].items.iter().any(|i| i == "folder (copy)/"));
+    assert!(
+        context.panels[0]
+            .items
+            .iter()
+            .any(|i| i == "file with spaces.txt")
+    );
+    assert!(
+        context.panels[0]
+            .items
+            .iter()
+            .any(|i| i == "file-with-dashes.txt")
+    );
+    assert!(
+        context.panels[0]
+            .items
+            .iter()
+            .any(|i| i == "folder (copy)/")
+    );
 }
 
 // ============================================================================
@@ -335,7 +359,9 @@ fn test_backend_read_file_preview() {
     fs::write(&file_path, content).unwrap();
 
     let b = LocalBackend::new();
-    let data = b.read_file(&file_path.to_string_lossy(), 64 * 1024).unwrap();
+    let data = b
+        .read_file(&file_path.to_string_lossy(), 64 * 1024)
+        .unwrap();
     let text = String::from_utf8(data).unwrap();
     assert_eq!(text, content);
 }
@@ -348,7 +374,9 @@ fn test_backend_read_file_large_truncated() {
     fs::write(&file_path, &large_content).unwrap();
 
     let b = LocalBackend::new();
-    let data = b.read_file(&file_path.to_string_lossy(), 64 * 1024).unwrap();
+    let data = b
+        .read_file(&file_path.to_string_lossy(), 64 * 1024)
+        .unwrap();
     assert_eq!(data.len(), 64 * 1024);
 }
 

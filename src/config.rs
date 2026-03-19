@@ -99,9 +99,7 @@ impl Config {
 
     pub fn load_from(path: &PathBuf) -> Self {
         match fs::read_to_string(path) {
-            Ok(content) => {
-                toml::from_str(&content).unwrap_or_default()
-            }
+            Ok(content) => toml::from_str(&content).unwrap_or_default(),
             Err(_) => Self::default(),
         }
     }
@@ -111,8 +109,12 @@ impl Config {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let content = toml::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to serialize config: {}", e)))?;
+        let content = toml::to_string_pretty(self).map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to serialize config: {}", e),
+            )
+        })?;
         let tmp_path = path.with_extension("toml.tmp");
         fs::write(&tmp_path, content)?;
         fs::rename(&tmp_path, &path)

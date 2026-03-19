@@ -32,7 +32,10 @@ fn test_apply_filter_empty() {
     context.panels[0].apply_filter();
 
     // All items should be visible
-    assert_eq!(context.panels[0].filtered_items.len(), context.panels[0].items.len());
+    assert_eq!(
+        context.panels[0].filtered_items.len(),
+        context.panels[0].items.len()
+    );
 }
 
 #[test]
@@ -43,10 +46,26 @@ fn test_apply_filter_matches_files() {
     context.panels[0].apply_filter();
 
     // Should match apple.txt, banana.txt + ../
-    assert!(context.panels[0].filtered_items.contains(&"../".to_string()));
-    assert!(context.panels[0].filtered_items.contains(&"apple.txt".to_string()));
-    assert!(context.panels[0].filtered_items.contains(&"banana.txt".to_string()));
-    assert!(!context.panels[0].filtered_items.contains(&"cherry.log".to_string()));
+    assert!(
+        context.panels[0]
+            .filtered_items
+            .contains(&"../".to_string())
+    );
+    assert!(
+        context.panels[0]
+            .filtered_items
+            .contains(&"apple.txt".to_string())
+    );
+    assert!(
+        context.panels[0]
+            .filtered_items
+            .contains(&"banana.txt".to_string())
+    );
+    assert!(
+        !context.panels[0]
+            .filtered_items
+            .contains(&"cherry.log".to_string())
+    );
 }
 
 #[test]
@@ -57,9 +76,21 @@ fn test_apply_filter_matches_folders() {
     context.panels[0].apply_filter();
 
     // Should match documents/, downloads/ + ../
-    assert!(context.panels[0].filtered_items.contains(&"documents/".to_string()));
-    assert!(context.panels[0].filtered_items.contains(&"downloads/".to_string()));
-    assert!(!context.panels[0].filtered_items.contains(&"apple.txt".to_string()));
+    assert!(
+        context.panels[0]
+            .filtered_items
+            .contains(&"documents/".to_string())
+    );
+    assert!(
+        context.panels[0]
+            .filtered_items
+            .contains(&"downloads/".to_string())
+    );
+    assert!(
+        !context.panels[0]
+            .filtered_items
+            .contains(&"apple.txt".to_string())
+    );
 }
 
 #[test]
@@ -69,7 +100,11 @@ fn test_apply_filter_case_insensitive() {
     context.panels[0].filter = "APPLE".to_string();
     context.panels[0].apply_filter();
 
-    assert!(context.panels[0].filtered_items.contains(&"apple.txt".to_string()));
+    assert!(
+        context.panels[0]
+            .filtered_items
+            .contains(&"apple.txt".to_string())
+    );
 }
 
 #[test]
@@ -121,7 +156,10 @@ fn test_get_selected_item_uses_filtered_items() {
 
     // State 0 = ../, State 1 = banana.txt
     context.panels[0].state = 1;
-    assert_eq!(context.panels[0].get_selected_item(), Some(&"banana.txt".to_string()));
+    assert_eq!(
+        context.panels[0].get_selected_item(),
+        Some(&"banana.txt".to_string())
+    );
 }
 
 #[test]
@@ -131,7 +169,11 @@ fn test_filter_parent_always_visible() {
     context.panels[0].filter = "nonexistent_filter_term".to_string();
     context.panels[0].apply_filter();
 
-    assert!(context.panels[0].filtered_items.contains(&"../".to_string()));
+    assert!(
+        context.panels[0]
+            .filtered_items
+            .contains(&"../".to_string())
+    );
 }
 
 #[test]
@@ -144,5 +186,10 @@ fn test_list_children_applies_existing_filter() {
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
     // Filter should be applied to new items
-    assert!(context.panels[0].filtered_items.iter().all(|i| i == "../" || i.contains("txt")));
+    assert!(
+        context.panels[0]
+            .filtered_items
+            .iter()
+            .all(|i| i == "../" || i.contains("txt"))
+    );
 }

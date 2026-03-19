@@ -1,7 +1,7 @@
 use std::io::Result;
 use std::path::{Path, PathBuf};
-use std::{fs, io};
 use std::sync::Arc;
+use std::{fs, io};
 
 use crate::backend::{FileInfo, FilesystemBackend};
 use crate::context::UiState::Normal;
@@ -59,7 +59,7 @@ pub fn delete_with_backend(backend: &Arc<dyn FilesystemBackend>, path: &str) -> 
     if path.contains("../") {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "Cannot delete parent directory"
+            "Cannot delete parent directory",
         ));
     }
 
@@ -92,32 +92,34 @@ impl Drop for TempFileGuard {
 /// Opens a file using the appropriate backend
 pub fn open_file_with_backend(backend: &Arc<dyn FilesystemBackend>, path: &str) -> FileResult<()> {
     if backend.is_local() {
-        edit::edit_file(Path::new(path))
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+        edit::edit_file(Path::new(path)).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
     } else {
         // Remote: download to temp, edit, upload back
         let data = backend.read_file(path, usize::MAX)?;
         let tmp_dir = std::env::temp_dir();
-        let file_name = backend.file_name(path).unwrap_or_else(|| "tempfile".to_string());
+        let file_name = backend
+            .file_name(path)
+            .unwrap_or_else(|| "tempfile".to_string());
         let tmp_path = tmp_dir.join(&file_name);
         fs::write(&tmp_path, &data)?;
         let _guard = TempFileGuard(tmp_path.clone());
-        edit::edit_file(&tmp_path)
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        edit::edit_file(&tmp_path).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let modified = fs::read(&tmp_path)?;
         backend.write_file(path, &modified)?;
         Ok(())
     }
 }
 
-
-
 /// Handle creating a new directory from the user input
 pub fn handle_create_directory(context: &mut Context) -> FileResult<()> {
-    let input = context.get_input()
+    let input = context
+        .get_input()
         .ok_or_else(|| Box::<dyn std::error::Error>::from("No input provided"))?;
 
-    let path = context.active().backend.join_path(&context.active().path, input);
+    let path = context
+        .active()
+        .backend
+        .join_path(&context.active().path, input);
 
     context.set_ui_state(Normal);
     context.active().backend.create_dir(&path)?;
@@ -129,14 +131,18 @@ pub fn handle_create_directory(context: &mut Context) -> FileResult<()> {
 
 /// Handle creating a new file from the user input
 pub fn handle_create_file(context: &mut Context) -> FileResult<()> {
-    let input = context.get_input()
+    let input = context
+        .get_input()
         .ok_or_else(|| Box::<dyn std::error::Error>::from("No input provided"))?;
 
     if input.is_empty() {
         return Err("Filename cannot be empty".into());
     }
 
-    let path = context.active().backend.join_path(&context.active().path, input);
+    let path = context
+        .active()
+        .backend
+        .join_path(&context.active().path, input);
 
     if context.active().backend.exists(&path).unwrap_or(false) {
         return Err(format!("Already exists: {}", path).into());
@@ -152,7 +158,8 @@ pub fn handle_create_file(context: &mut Context) -> FileResult<()> {
 
 /// Handle rename operation from user input
 pub fn handle_rename(context: &mut Context) -> FileResult<()> {
-    let new_name = context.get_input()
+    let new_name = context
+        .get_input()
         .ok_or_else(|| Box::<dyn std::error::Error>::from("No input provided"))?
         .clone();
 
@@ -161,11 +168,14 @@ pub fn handle_rename(context: &mut Context) -> FileResult<()> {
     }
 
     let panel = context.active();
-    let selected = panel.get_selected_item()
+    let selected = panel
+        .get_selected_item()
         .ok_or_else(|| Box::<dyn std::error::Error>::from("No item selected"))?
         .clone();
 
-    let old_path = panel.backend.join_path(&panel.path, selected.trim_end_matches('/'));
+    let old_path = panel
+        .backend
+        .join_path(&panel.path, selected.trim_end_matches('/'));
     let new_path = panel.backend.join_path(&panel.path, &new_name);
 
     context.set_ui_state(Normal);
@@ -179,9 +189,12 @@ pub fn handle_rename(context: &mut Context) -> FileResult<()> {
 pub fn resolve_paste_paths(context: &mut Context) -> FileResult<(String, String)> {
     let from = context.get_copy_path().clone();
     let dest_dir = resolve_dest_dir(context)?;
-    let src_backend = context.copy_source_backend.as_ref()
+    let src_backend = context
+        .copy_source_backend
+        .as_ref()
         .unwrap_or(&context.active().backend);
-    let item_name = src_backend.file_name(&from)
+    let item_name = src_backend
+        .file_name(&from)
         .ok_or_else(|| Box::<dyn std::error::Error>::from("Invalid source path"))?;
     let to = context.active().backend.join_path(&dest_dir, &item_name);
     Ok((from, to))
@@ -193,7 +206,9 @@ fn resolve_dest_dir(context: &mut Context) -> FileResult<String> {
 
     if panel.get_state() != 0 {
         if let Some(item) = panel.get_selected_item() {
-            let full = panel.backend.join_path(&base_path, item.trim_end_matches('/'));
+            let full = panel
+                .backend
+                .join_path(&base_path, item.trim_end_matches('/'));
             if let Ok(info) = panel.backend.metadata(&full) {
                 if info.is_dir {
                     return Ok(full);
@@ -221,7 +236,8 @@ pub fn format_file_metadata_from_info(info: &FileInfo) -> String {
         format_size(info.size)
     };
 
-    let modified = info.modified
+    let modified = info
+        .modified
         .and_then(|t| t.elapsed().ok())
         .map(|elapsed| {
             let secs = elapsed.as_secs();
@@ -237,7 +253,11 @@ pub fn format_file_metadata_from_info(info: &FileInfo) -> String {
         })
         .unwrap_or_else(|| "Unknown".to_string());
 
-    let permissions = if info.readonly { "Read-only" } else { "Read/Write" };
+    let permissions = if info.readonly {
+        "Read-only"
+    } else {
+        "Read/Write"
+    };
 
     format!(
         "Type: {}\nSize: {}\nModified: {}\nPermissions: {}",
@@ -259,13 +279,16 @@ pub fn generate_preview_with_backend(backend: &Arc<dyn FilesystemBackend>, path:
             Ok(entries) => {
                 let mut result = metadata_str;
                 result.push_str("\n\n=== Contents ===\n");
-                let mut names: Vec<String> = entries.iter().map(|e| {
-                    if e.info.is_dir {
-                        format!("{}/", e.name)
-                    } else {
-                        e.name.clone()
-                    }
-                }).collect();
+                let mut names: Vec<String> = entries
+                    .iter()
+                    .map(|e| {
+                        if e.info.is_dir {
+                            format!("{}/", e.name)
+                        } else {
+                            e.name.clone()
+                        }
+                    })
+                    .collect();
                 names.sort();
                 let total = names.len();
                 for name in names.iter().take(20) {
@@ -280,17 +303,15 @@ pub fn generate_preview_with_backend(backend: &Arc<dyn FilesystemBackend>, path:
         }
     } else if info.is_file {
         match backend.read_file(path, 64 * 1024) {
-            Ok(data) => {
-                match String::from_utf8(data) {
-                    Ok(text) => {
-                        let mut result = metadata_str;
-                        result.push_str("\n\n=== Preview ===\n");
-                        result.push_str(&text);
-                        result
-                    }
-                    Err(_) => format!("{}\n\n[Binary file - cannot preview]", metadata_str),
+            Ok(data) => match String::from_utf8(data) {
+                Ok(text) => {
+                    let mut result = metadata_str;
+                    result.push_str("\n\n=== Preview ===\n");
+                    result.push_str(&text);
+                    result
                 }
-            }
+                Err(_) => format!("{}\n\n[Binary file - cannot preview]", metadata_str),
+            },
             Err(e) => format!("{}\n\n[{}]", metadata_str, e),
         }
     } else {
@@ -314,4 +335,3 @@ pub fn format_size(size: u64) -> String {
         format!("{} B", size)
     }
 }
-

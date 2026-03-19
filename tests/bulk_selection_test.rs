@@ -31,7 +31,11 @@ fn create_bulk_context() -> (Context, TempDir) {
 fn test_toggle_selection_select() {
     let (mut context, _temp) = create_bulk_context();
 
-    let idx = context.panels[0].filtered_items.iter().position(|i| i == "file1.txt").unwrap();
+    let idx = context.panels[0]
+        .filtered_items
+        .iter()
+        .position(|i| i == "file1.txt")
+        .unwrap();
     context.panels[0].state = idx;
     context.panels[0].toggle_selection();
 
@@ -42,7 +46,11 @@ fn test_toggle_selection_select() {
 fn test_toggle_selection_deselect() {
     let (mut context, _temp) = create_bulk_context();
 
-    let idx = context.panels[0].filtered_items.iter().position(|i| i == "file1.txt").unwrap();
+    let idx = context.panels[0]
+        .filtered_items
+        .iter()
+        .position(|i| i == "file1.txt")
+        .unwrap();
     context.panels[0].state = idx;
 
     context.panels[0].toggle_selection();
@@ -66,8 +74,16 @@ fn test_toggle_selection_ignores_parent() {
 fn test_toggle_selection_multiple_items() {
     let (mut context, _temp) = create_bulk_context();
 
-    let idx1 = context.panels[0].filtered_items.iter().position(|i| i == "file1.txt").unwrap();
-    let idx2 = context.panels[0].filtered_items.iter().position(|i| i == "file2.txt").unwrap();
+    let idx1 = context.panels[0]
+        .filtered_items
+        .iter()
+        .position(|i| i == "file1.txt")
+        .unwrap();
+    let idx2 = context.panels[0]
+        .filtered_items
+        .iter()
+        .position(|i| i == "file2.txt")
+        .unwrap();
 
     context.panels[0].state = idx1;
     context.panels[0].toggle_selection();
@@ -115,7 +131,11 @@ fn test_has_selection() {
 
     assert!(!context.panels[0].has_selection());
 
-    let idx = context.panels[0].filtered_items.iter().position(|i| i == "file1.txt").unwrap();
+    let idx = context.panels[0]
+        .filtered_items
+        .iter()
+        .position(|i| i == "file1.txt")
+        .unwrap();
     context.panels[0].state = idx;
     context.panels[0].toggle_selection();
 
@@ -130,26 +150,40 @@ fn test_has_selection() {
 fn test_get_selected_paths() {
     let (mut context, temp) = create_bulk_context();
 
-    let idx = context.panels[0].filtered_items.iter().position(|i| i == "file1.txt").unwrap();
+    let idx = context.panels[0]
+        .filtered_items
+        .iter()
+        .position(|i| i == "file1.txt")
+        .unwrap();
     context.panels[0].state = idx;
     context.panels[0].toggle_selection();
 
     let paths = context.panels[0].get_selected_paths();
     assert_eq!(paths.len(), 1);
-    assert_eq!(paths[0], temp.path().join("file1.txt").to_string_lossy().to_string());
+    assert_eq!(
+        paths[0],
+        temp.path().join("file1.txt").to_string_lossy().to_string()
+    );
 }
 
 #[test]
 fn test_get_selected_paths_strips_trailing_slash() {
     let (mut context, temp) = create_bulk_context();
 
-    let idx = context.panels[0].filtered_items.iter().position(|i| i == "folder1/").unwrap();
+    let idx = context.panels[0]
+        .filtered_items
+        .iter()
+        .position(|i| i == "folder1/")
+        .unwrap();
     context.panels[0].state = idx;
     context.panels[0].toggle_selection();
 
     let paths = context.panels[0].get_selected_paths();
     assert_eq!(paths.len(), 1);
-    assert_eq!(paths[0], temp.path().join("folder1").to_string_lossy().to_string());
+    assert_eq!(
+        paths[0],
+        temp.path().join("folder1").to_string_lossy().to_string()
+    );
 }
 
 // ============================================================================
@@ -165,14 +199,18 @@ fn test_batch_delete() {
     fs::write(base.join("b.txt"), "b").unwrap();
     fs::write(base.join("c.txt"), "c").unwrap();
 
-    let paths = vec![
-        base.join("a.txt"),
-        base.join("b.txt"),
-    ];
+    let paths = vec![base.join("a.txt"), base.join("b.txt")];
 
     let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
-    let paths_str: Vec<String> = paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
-    let rx = background_op::spawn_delete_batch_with_backend(backend, paths_str, "test delete".to_string());
+    let paths_str: Vec<String> = paths
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    let rx = background_op::spawn_delete_batch_with_backend(
+        backend,
+        paths_str,
+        "test delete".to_string(),
+    );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
 
@@ -204,12 +242,22 @@ fn test_batch_copy() {
     ];
 
     let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
-    let items_str: Vec<(String, String)> = items.iter()
-        .map(|(f, t)| (f.to_string_lossy().to_string(), t.to_string_lossy().to_string()))
+    let items_str: Vec<(String, String)> = items
+        .iter()
+        .map(|(f, t)| {
+            (
+                f.to_string_lossy().to_string(),
+                t.to_string_lossy().to_string(),
+            )
+        })
         .collect();
     let rx = background_op::spawn_copy_batch_with_backend(
-        Arc::clone(&backend), Arc::clone(&backend),
-        items_str, "test copy".to_string(), false, None,
+        Arc::clone(&backend),
+        Arc::clone(&backend),
+        items_str,
+        "test copy".to_string(),
+        false,
+        None,
     );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
@@ -233,17 +281,25 @@ fn test_batch_move() {
 
     fs::write(src.join("a.txt"), "aaa").unwrap();
 
-    let items = vec![
-        (src.join("a.txt"), dst.join("a.txt")),
-    ];
+    let items = vec![(src.join("a.txt"), dst.join("a.txt"))];
 
     let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
-    let items_str: Vec<(String, String)> = items.iter()
-        .map(|(f, t)| (f.to_string_lossy().to_string(), t.to_string_lossy().to_string()))
+    let items_str: Vec<(String, String)> = items
+        .iter()
+        .map(|(f, t)| {
+            (
+                f.to_string_lossy().to_string(),
+                t.to_string_lossy().to_string(),
+            )
+        })
         .collect();
     let rx = background_op::spawn_copy_batch_with_backend(
-        Arc::clone(&backend), Arc::clone(&backend),
-        items_str, "test move".to_string(), true, None,
+        Arc::clone(&backend),
+        Arc::clone(&backend),
+        items_str,
+        "test move".to_string(),
+        true,
+        None,
     );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());

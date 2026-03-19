@@ -52,12 +52,9 @@ impl FilesystemBackend for LocalBackend {
 
         for entry_result in fs::read_dir(path)? {
             let entry = entry_result?;
-            let file_name = entry.file_name()
-                .into_string()
-                .map_err(|_| io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Invalid UTF-8 in filename",
-                ))?;
+            let file_name = entry.file_name().into_string().map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "Invalid UTF-8 in filename")
+            })?;
             let meta = entry.metadata()?;
             entries.push(DirEntry {
                 name: file_name.clone(),
@@ -71,7 +68,8 @@ impl FilesystemBackend for LocalBackend {
     fn metadata(&self, path: &str) -> io::Result<FileInfo> {
         let p = Path::new(path);
         let meta = fs::metadata(p)?;
-        let name = p.file_name()
+        let name = p
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         Ok(metadata_to_fileinfo(&name, &meta))
@@ -83,12 +81,9 @@ impl FilesystemBackend for LocalBackend {
 
     fn canonicalize(&self, path: &str) -> io::Result<String> {
         let canonical = fs::canonicalize(path)?;
-        canonical.to_str()
-            .map(|s| s.to_string())
-            .ok_or_else(|| io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Path contains invalid Unicode",
-            ))
+        canonical.to_str().map(|s| s.to_string()).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "Path contains invalid Unicode")
+        })
     }
 
     fn read_file(&self, path: &str, max_bytes: usize) -> io::Result<Vec<u8>> {
@@ -156,15 +151,9 @@ impl FilesystemBackend for LocalBackend {
             let to_path = dst.join(entry.file_name());
 
             if file_type.is_dir() {
-                self.copy_dir(
-                    &from_path.to_string_lossy(),
-                    &to_path.to_string_lossy(),
-                )?;
+                self.copy_dir(&from_path.to_string_lossy(), &to_path.to_string_lossy())?;
             } else if file_type.is_file() {
-                self.copy_file(
-                    &from_path.to_string_lossy(),
-                    &to_path.to_string_lossy(),
-                )?;
+                self.copy_file(&from_path.to_string_lossy(), &to_path.to_string_lossy())?;
             } else if file_type.is_symlink() {
                 let target = fs::read_link(&from_path)?;
                 let resolved = if target.is_absolute() {
@@ -173,15 +162,9 @@ impl FilesystemBackend for LocalBackend {
                     from_path.parent().unwrap_or(Path::new("")).join(target)
                 };
                 if resolved.is_dir() {
-                    self.copy_dir(
-                        &resolved.to_string_lossy(),
-                        &to_path.to_string_lossy(),
-                    )?;
+                    self.copy_dir(&resolved.to_string_lossy(), &to_path.to_string_lossy())?;
                 } else {
-                    self.copy_file(
-                        &resolved.to_string_lossy(),
-                        &to_path.to_string_lossy(),
-                    )?;
+                    self.copy_file(&resolved.to_string_lossy(), &to_path.to_string_lossy())?;
                 }
             }
         }
@@ -190,15 +173,22 @@ impl FilesystemBackend for LocalBackend {
     }
 
     fn join_path(&self, base: &str, child: &str) -> String {
-        PathBuf::from(base).join(child).to_string_lossy().to_string()
+        PathBuf::from(base)
+            .join(child)
+            .to_string_lossy()
+            .to_string()
     }
 
     fn parent_path(&self, path: &str) -> Option<String> {
-        Path::new(path).parent().map(|p| p.to_string_lossy().to_string())
+        Path::new(path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
     }
 
     fn file_name(&self, path: &str) -> Option<String> {
-        Path::new(path).file_name().map(|n| n.to_string_lossy().to_string())
+        Path::new(path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
     }
 
     #[cfg(unix)]

@@ -101,12 +101,19 @@ pub trait FilesystemBackend: Send + Sync {
 
     /// Change file permissions (octal mode, e.g. 0o755)
     fn chmod(&self, _path: &str, _mode: u32) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::Unsupported, "chmod not supported"))
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "chmod not supported",
+        ))
     }
 
     /// Check if the connection is still alive (always true for local)
-    fn is_connected(&self) -> bool { true }
+    fn is_connected(&self) -> bool {
+        true
+    }
 
     /// Get connection parameters for reconnection (None for local)
-    fn connection_params(&self) -> Option<ConnectionParams> { None }
+    fn connection_params(&self) -> Option<ConnectionParams> {
+        None
+    }
 }

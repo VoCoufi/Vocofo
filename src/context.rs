@@ -4,8 +4,8 @@ use crate::config::Config;
 use crate::file_operation;
 use crate::local_backend::LocalBackend;
 use std::collections::HashSet;
-use std::sync::mpsc;
 use std::sync::Arc;
+use std::sync::mpsc;
 use std::time::Instant;
 
 /// State for a single directory panel
@@ -75,7 +75,9 @@ impl PanelState {
 
     pub fn get_metadata_selected_item(&self) -> Option<FileInfo> {
         let item = self.get_selected_item()?;
-        let full_path = self.backend.join_path(&self.path, item.trim_end_matches('/'));
+        let full_path = self
+            .backend
+            .join_path(&self.path, item.trim_end_matches('/'));
         self.backend.metadata(&full_path).ok()
     }
 
@@ -84,10 +86,10 @@ impl PanelState {
             self.filtered_items = self.items.clone();
         } else {
             let filter_lower = self.filter.to_lowercase();
-            self.filtered_items = self.items.iter()
-                .filter(|item| {
-                    *item == "../" || item.to_lowercase().contains(&filter_lower)
-                })
+            self.filtered_items = self
+                .items
+                .iter()
+                .filter(|item| *item == "../" || item.to_lowercase().contains(&filter_lower))
                 .cloned()
                 .collect();
         }
@@ -223,8 +225,12 @@ impl PanelState {
     }
 
     pub fn get_selected_paths(&self) -> Vec<String> {
-        self.selected.iter()
-            .map(|name| self.backend.join_path(&self.path, name.trim_end_matches('/')))
+        self.selected
+            .iter()
+            .map(|name| {
+                self.backend
+                    .join_path(&self.path, name.trim_end_matches('/'))
+            })
             .collect()
     }
 }
@@ -376,7 +382,8 @@ impl Context {
 
     pub fn with_config(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
         let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
-        let initial_path = backend.canonicalize(&config.general.default_path)
+        let initial_path = backend
+            .canonicalize(&config.general.default_path)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let show_hidden = config.general.show_hidden;
         let mut panel0 = PanelState::new(initial_path.clone(), Arc::clone(&backend));
@@ -479,7 +486,10 @@ impl Context {
         }
 
         let clean_item = item.trim_end_matches("/");
-        self.copy_path = self.active().backend.join_path(&self.active().path, clean_item);
+        self.copy_path = self
+            .active()
+            .backend
+            .join_path(&self.active().path, clean_item);
     }
 
     pub fn set_status_message(&mut self, message: &str) {

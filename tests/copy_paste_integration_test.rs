@@ -1,20 +1,23 @@
 use std::fs;
 use std::sync::Arc;
 use tempfile::TempDir;
-use vocofo::background_op;
 use vocofo::backend::FilesystemBackend;
+use vocofo::background_op;
 use vocofo::context::{ClipboardMode, Context};
 use vocofo::file_operation;
 use vocofo::local_backend::LocalBackend;
 
 /// Helper: resolve paths and run a synchronous copy via background_op
 fn paste_and_wait(context: &mut Context) -> Result<(), String> {
-    let (from, to) = file_operation::resolve_paste_paths(context)
-        .map_err(|e| e.to_string())?;
+    let (from, to) = file_operation::resolve_paste_paths(context).map_err(|e| e.to_string())?;
     let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
     let rx = background_op::spawn_copy_with_backend(
-        Arc::clone(&backend), Arc::clone(&backend),
-        from, to, "test".to_string(), None,
+        Arc::clone(&backend),
+        Arc::clone(&backend),
+        from,
+        to,
+        "test".to_string(),
+        None,
     );
     let result = rx.recv().map_err(|e| e.to_string())?;
     result.result
@@ -23,8 +26,12 @@ fn paste_and_wait(context: &mut Context) -> Result<(), String> {
 fn move_and_wait(from: String, to: String) -> Result<(), String> {
     let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
     let rx = background_op::spawn_move_with_backend(
-        Arc::clone(&backend), Arc::clone(&backend),
-        from, to, "test move".to_string(), None,
+        Arc::clone(&backend),
+        Arc::clone(&backend),
+        from,
+        to,
+        "test move".to_string(),
+        None,
     );
     let result = rx.recv().map_err(|e| e.to_string())?;
     result.result
@@ -45,7 +52,11 @@ fn test_copy_paste_file_workflow() {
     context.panels[0].path = source_dir.to_string_lossy().to_string();
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let file_idx = context.panels[0].items.iter().position(|i| i == "test.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "test.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
     context.set_copy_path();
 
@@ -80,7 +91,11 @@ fn test_copy_paste_folder_workflow() {
     context.panels[0].path = source_dir.to_string_lossy().to_string();
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let folder_idx = context.panels[0].items.iter().position(|i| i == "myfolder/").unwrap();
+    let folder_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "myfolder/")
+        .unwrap();
     context.panels[0].state = folder_idx;
     context.set_copy_path();
 
@@ -96,7 +111,10 @@ fn test_copy_paste_folder_workflow() {
     assert!(copied_folder.is_dir());
     assert!(copied_folder.join("file1.txt").exists());
     assert!(copied_folder.join("file2.txt").exists());
-    assert_eq!(fs::read_to_string(copied_folder.join("file1.txt")).unwrap(), "content1");
+    assert_eq!(
+        fs::read_to_string(copied_folder.join("file1.txt")).unwrap(),
+        "content1"
+    );
 }
 
 #[test]
@@ -111,11 +129,19 @@ fn test_copy_paste_into_subfolder() {
     context.panels[0].path = base.to_string_lossy().to_string();
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let file_idx = context.panels[0].items.iter().position(|i| i == "file.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "file.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
     context.set_copy_path();
 
-    let folder_idx = context.panels[0].items.iter().position(|i| i == "subfolder/").unwrap();
+    let folder_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "subfolder/")
+        .unwrap();
     context.panels[0].state = folder_idx;
 
     let result = paste_and_wait(&mut context);
@@ -134,7 +160,11 @@ fn test_copy_paste_same_directory_detected() {
     context.panels[0].path = base.to_string_lossy().to_string();
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let file_idx = context.panels[0].items.iter().position(|i| i == "file.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "file.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
     context.set_copy_path();
 
@@ -173,7 +203,10 @@ fn test_copy_parent_directory_does_nothing() {
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
     context.panels[0].state = 0;
-    assert_eq!(context.panels[0].get_selected_item(), Some(&"../".to_string()));
+    assert_eq!(
+        context.panels[0].get_selected_item(),
+        Some(&"../".to_string())
+    );
     context.set_copy_path();
     assert!(context.copy_path.is_empty());
 }
@@ -193,7 +226,11 @@ fn test_copy_file_with_special_characters() {
     context.panels[0].path = base.to_string_lossy().to_string();
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let file_idx = context.panels[0].items.iter().position(|i| i == special_file).unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == special_file)
+        .unwrap();
     context.panels[0].state = file_idx;
     context.set_copy_path();
 
@@ -219,7 +256,11 @@ fn test_clipboard_persists_across_navigation() {
     context.panels[0].path = base.to_string_lossy().to_string();
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let file_idx = context.panels[0].items.iter().position(|i| i == "file.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "file.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
     context.set_copy_path();
     let clipboard_content = context.copy_path.clone();
@@ -248,7 +289,11 @@ fn test_overwrite_existing_file_fails() {
     context.panels[0].path = base.to_string_lossy().to_string();
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let file_idx = context.panels[0].items.iter().position(|i| i == "file.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "file.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
     context.set_copy_path();
 
@@ -260,7 +305,10 @@ fn test_overwrite_existing_file_fails() {
     // Backend copy may or may not fail on overwrite depending on implementation
     // The important thing is the file is accessible
     if result.is_err() {
-        assert_eq!(fs::read_to_string(dest.join("file.txt")).unwrap(), "existing");
+        assert_eq!(
+            fs::read_to_string(dest.join("file.txt")).unwrap(),
+            "existing"
+        );
     }
 }
 
@@ -279,7 +327,11 @@ fn test_cut_move_file_workflow() {
     context.panels[0].path = source_dir.to_string_lossy().to_string();
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let file_idx = context.panels[0].items.iter().position(|i| i == "moveme.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "moveme.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
     context.set_copy_path();
     context.clipboard_mode = ClipboardMode::Cut;
@@ -294,7 +346,10 @@ fn test_cut_move_file_workflow() {
 
     assert!(dest_dir.join("moveme.txt").exists());
     assert!(!source_dir.join("moveme.txt").exists());
-    assert_eq!(fs::read_to_string(dest_dir.join("moveme.txt")).unwrap(), "move content");
+    assert_eq!(
+        fs::read_to_string(dest_dir.join("moveme.txt")).unwrap(),
+        "move content"
+    );
 }
 
 #[test]
@@ -315,7 +370,11 @@ fn test_cut_move_folder_workflow() {
     context.panels[0].path = source_dir.to_string_lossy().to_string();
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let folder_idx = context.panels[0].items.iter().position(|i| i == "myfolder/").unwrap();
+    let folder_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "myfolder/")
+        .unwrap();
     context.panels[0].state = folder_idx;
     context.set_copy_path();
     context.clipboard_mode = ClipboardMode::Cut;

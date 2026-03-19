@@ -37,17 +37,16 @@ impl ScpBackend {
 
     /// Execute a command via SSH and return stdout
     fn ssh_exec(&self, cmd: &str) -> io::Result<String> {
-        let session = self.session.lock()
+        let session = self.session.lock().map_err(|e| scp_err("operation", e))?;
+        let mut channel = session
+            .channel_session()
             .map_err(|e| scp_err("operation", e))?;
-        let mut channel = session.channel_session()
-            .map_err(|e| scp_err("operation", e))?;
-        channel.exec(cmd)
-            .map_err(|e| scp_err("operation", e))?;
+        channel.exec(cmd).map_err(|e| scp_err("operation", e))?;
         let mut output = String::new();
-        channel.read_to_string(&mut output)
+        channel
+            .read_to_string(&mut output)
             .map_err(|e| scp_err("operation", e))?;
-        channel.wait_close()
-            .map_err(|e| scp_err("operation", e))?;
+        channel.wait_close().map_err(|e| scp_err("operation", e))?;
         Ok(output)
     }
 }
@@ -117,17 +116,16 @@ impl FilesystemBackend for ScpBackend {
 
     fn list_dir(&self, path: &str) -> io::Result<Vec<DirEntry>> {
         let output = self.ssh_exec(&format!("ls -la {}", shell_escape(path)))?;
-        let entries: Vec<DirEntry> = output.lines()
-            .filter_map(parse_ls_line)
-            .collect();
+        let entries: Vec<DirEntry> = output.lines().filter_map(parse_ls_line).collect();
         Ok(entries)
     }
 
     fn metadata(&self, path: &str) -> io::Result<FileInfo> {
         // Use stat to get metadata
-        let output = self.ssh_exec(
-            &format!("stat --format='%s %F %a' {} 2>/dev/null || echo 'NOTFOUND'", shell_escape(path))
-        )?;
+        let output = self.ssh_exec(&format!(
+            "stat --format='%s %F %a' {} 2>/dev/null || echo 'NOTFOUND'",
+            shell_escape(path)
+        ))?;
         let trimmed = output.trim();
         if trimmed == "NOTFOUND" || trimmed.is_empty() {
             return Err(io::Error::new(io::ErrorKind::NotFound, "File not found"));
@@ -144,7 +142,8 @@ impl FilesystemBackend for ScpBackend {
         let mode = u32::from_str_radix(mode_str, 8).ok();
         let readonly = mode.map(|m| m & 0o200 == 0).unwrap_or(false);
 
-        let name = Path::new(path).file_name()
+        let name = Path::new(path)
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
 
@@ -161,16 +160,19 @@ impl FilesystemBackend for ScpBackend {
     }
 
     fn exists(&self, path: &str) -> io::Result<bool> {
-        let output = self.ssh_exec(
-            &format!("test -e {} && echo 1 || echo 0", shell_escape(path))
-        )?;
+        let output = self.ssh_exec(&format!(
+            "test -e {} && echo 1 || echo 0",
+            shell_escape(path)
+        ))?;
         Ok(output.trim() == "1")
     }
 
     fn canonicalize(&self, path: &str) -> io::Result<String> {
-        let output = self.ssh_exec(
-            &format!("readlink -f {} 2>/dev/null || echo {}", shell_escape(path), shell_escape(path))
-        )?;
+        let output = self.ssh_exec(&format!(
+            "readlink -f {} 2>/dev/null || echo {}",
+            shell_escape(path),
+            shell_escape(path)
+        ))?;
         let result = output.trim().to_string();
         if result.is_empty() {
             Ok(path.to_string())
@@ -180,12 +182,13 @@ impl FilesystemBackend for ScpBackend {
     }
 
     fn read_file(&self, path: &str, max_bytes: usize) -> io::Result<Vec<u8>> {
-        let session = self.session.lock()
-            .map_err(|e| scp_err("operation", e))?;
-        let (mut channel, _stat) = session.scp_recv(Path::new(path))
+        let session = self.session.lock().map_err(|e| scp_err("operation", e))?;
+        let (mut channel, _stat) = session
+            .scp_recv(Path::new(path))
             .map_err(|e| scp_err("operation", e))?;
         let mut data = Vec::new();
-        channel.read_to_end(&mut data)
+        channel
+            .read_to_end(&mut data)
             .map_err(|e| scp_err("operation", e))?;
         if data.len() > max_bytes {
             data.truncate(max_bytes);
@@ -194,20 +197,17 @@ impl FilesystemBackend for ScpBackend {
     }
 
     fn write_file(&self, path: &str, data: &[u8]) -> io::Result<()> {
-        let session = self.session.lock()
+        let session = self.session.lock().map_err(|e| scp_err("operation", e))?;
+        let mut channel = session
+            .scp_send(Path::new(path), 0o644, data.len() as u64, None)
             .map_err(|e| scp_err("operation", e))?;
-        let mut channel = session.scp_send(Path::new(path), 0o644, data.len() as u64, None)
+        channel
+            .write_all(data)
             .map_err(|e| scp_err("operation", e))?;
-        channel.write_all(data)
-            .map_err(|e| scp_err("operation", e))?;
-        channel.send_eof()
-            .map_err(|e| scp_err("operation", e))?;
-        channel.wait_eof()
-            .map_err(|e| scp_err("operation", e))?;
-        channel.close()
-            .map_err(|e| scp_err("operation", e))?;
-        channel.wait_close()
-            .map_err(|e| scp_err("operation", e))?;
+        channel.send_eof().map_err(|e| scp_err("operation", e))?;
+        channel.wait_eof().map_err(|e| scp_err("operation", e))?;
+        channel.close().map_err(|e| scp_err("operation", e))?;
+        channel.wait_close().map_err(|e| scp_err("operation", e))?;
         Ok(())
     }
 
@@ -242,7 +242,11 @@ impl FilesystemBackend for ScpBackend {
     }
 
     fn copy_dir(&self, from: &str, to: &str) -> io::Result<()> {
-        self.ssh_exec(&format!("cp -r {} {}", shell_escape(from), shell_escape(to)))?;
+        self.ssh_exec(&format!(
+            "cp -r {} {}",
+            shell_escape(from),
+            shell_escape(to)
+        ))?;
         Ok(())
     }
 

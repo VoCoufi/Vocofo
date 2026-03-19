@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use vocofo::context::{Context, ClipboardMode, UiState};
+use vocofo::context::{ClipboardMode, Context, UiState};
 use vocofo::file_operation;
 
 /// Helper to create a context with a test directory containing many files
@@ -267,7 +267,9 @@ fn test_clipboard_mode_default_copy() {
 fn test_clipboard_single_file() {
     let (mut context, _temp_dir) = create_test_context();
     // Select file1.txt (index depends on sorting, find it)
-    let idx = context.panels[0].filtered_items.iter()
+    let idx = context.panels[0]
+        .filtered_items
+        .iter()
         .position(|i| i == "file1.txt")
         .unwrap();
     context.panels[0].state = idx;
@@ -288,10 +290,7 @@ fn test_clipboard_mode_cut() {
 fn test_clipboard_bulk_paths() {
     let (mut context, _temp_dir) = create_test_context();
     let paths = context.panels[0].get_selected_paths();
-    context.copy_paths = vec![
-        "/tmp/a.txt".to_string(),
-        "/tmp/b.txt".to_string(),
-    ];
+    context.copy_paths = vec!["/tmp/a.txt".to_string(), "/tmp/b.txt".to_string()];
     assert_eq!(context.copy_paths.len(), 2);
     drop(paths);
 }

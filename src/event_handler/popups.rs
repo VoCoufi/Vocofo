@@ -32,11 +32,15 @@ pub fn handle_search_event(context: &mut Context, key_event: KeyEvent) -> EventR
         }
         KeyCode::Down => {
             let panel = context.active_mut();
-            if panel.filtered_items.len() > panel.state + 1 { panel.increment_state(); }
+            if panel.filtered_items.len() > panel.state + 1 {
+                panel.increment_state();
+            }
         }
         KeyCode::Up => {
             let panel = context.active_mut();
-            if panel.state > 0 { panel.decrease_state(); }
+            if panel.state > 0 {
+                panel.decrease_state();
+            }
         }
         KeyCode::Char(c) => {
             let panel = context.active_mut();
@@ -51,22 +55,28 @@ pub fn handle_search_event(context: &mut Context, key_event: KeyEvent) -> EventR
 /// Handles key events for the create folder popup
 pub fn handle_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
     match key_event.code {
-        KeyCode::Backspace => { if !context.input.is_empty() { context.input.pop(); } }
-        KeyCode::Enter => {
-            match file_operation::handle_create_directory(context) {
-                Ok(_) => {
-                    context.active_mut().invalidate_directory_cache();
-                    context.set_status_message("Folder created");
-                }
-                Err(e) => {
-                    context.set_ui_state(UiState::Normal);
-                    context.set_input(String::default());
-                    context.set_status_message(&format!("Create failed: {}", e));
-                }
+        KeyCode::Backspace => {
+            if !context.input.is_empty() {
+                context.input.pop();
             }
         }
-        KeyCode::Esc => { context.set_ui_state(UiState::Normal); }
-        KeyCode::Char(c) => { context.input.push(c); }
+        KeyCode::Enter => match file_operation::handle_create_directory(context) {
+            Ok(_) => {
+                context.active_mut().invalidate_directory_cache();
+                context.set_status_message("Folder created");
+            }
+            Err(e) => {
+                context.set_ui_state(UiState::Normal);
+                context.set_input(String::default());
+                context.set_status_message(&format!("Create failed: {}", e));
+            }
+        },
+        KeyCode::Esc => {
+            context.set_ui_state(UiState::Normal);
+        }
+        KeyCode::Char(c) => {
+            context.input.push(c);
+        }
         _ => {}
     }
     Ok(())
@@ -75,25 +85,29 @@ pub fn handle_popup_event(context: &mut Context, key_event: KeyEvent) -> EventRe
 /// Handles key events for the create file popup
 pub fn handle_file_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
     match key_event.code {
-        KeyCode::Backspace => { if !context.input.is_empty() { context.input.pop(); } }
-        KeyCode::Enter => {
-            match file_operation::handle_create_file(context) {
-                Ok(_) => {
-                    context.active_mut().invalidate_directory_cache();
-                    context.set_status_message("File created");
-                }
-                Err(e) => {
-                    context.set_ui_state(UiState::Normal);
-                    context.set_input(String::default());
-                    context.set_status_message(&format!("Create failed: {}", e));
-                }
+        KeyCode::Backspace => {
+            if !context.input.is_empty() {
+                context.input.pop();
             }
         }
+        KeyCode::Enter => match file_operation::handle_create_file(context) {
+            Ok(_) => {
+                context.active_mut().invalidate_directory_cache();
+                context.set_status_message("File created");
+            }
+            Err(e) => {
+                context.set_ui_state(UiState::Normal);
+                context.set_input(String::default());
+                context.set_status_message(&format!("Create failed: {}", e));
+            }
+        },
         KeyCode::Esc => {
             context.set_ui_state(UiState::Normal);
             context.set_input(String::default());
         }
-        KeyCode::Char(c) => { context.input.push(c); }
+        KeyCode::Char(c) => {
+            context.input.push(c);
+        }
         _ => {}
     }
     Ok(())
@@ -102,25 +116,29 @@ pub fn handle_file_popup_event(context: &mut Context, key_event: KeyEvent) -> Ev
 /// Handles key events for the rename popup
 pub fn handle_rename_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
     match key_event.code {
-        KeyCode::Backspace => { if !context.input.is_empty() { context.input.pop(); } }
-        KeyCode::Enter => {
-            match file_operation::handle_rename(context) {
-                Ok(_) => {
-                    context.active_mut().invalidate_directory_cache();
-                    context.set_status_message("Renamed successfully");
-                }
-                Err(e) => {
-                    context.set_ui_state(UiState::Normal);
-                    context.set_input(String::default());
-                    context.set_status_message(&format!("Rename failed: {}", e));
-                }
+        KeyCode::Backspace => {
+            if !context.input.is_empty() {
+                context.input.pop();
             }
         }
+        KeyCode::Enter => match file_operation::handle_rename(context) {
+            Ok(_) => {
+                context.active_mut().invalidate_directory_cache();
+                context.set_status_message("Renamed successfully");
+            }
+            Err(e) => {
+                context.set_ui_state(UiState::Normal);
+                context.set_input(String::default());
+                context.set_status_message(&format!("Rename failed: {}", e));
+            }
+        },
         KeyCode::Esc => {
             context.set_ui_state(UiState::Normal);
             context.set_input(String::default());
         }
-        KeyCode::Char(c) => { context.input.push(c); }
+        KeyCode::Char(c) => {
+            context.input.push(c);
+        }
         _ => {}
     }
     Ok(())
@@ -129,7 +147,11 @@ pub fn handle_rename_popup_event(context: &mut Context, key_event: KeyEvent) -> 
 /// Handles key events for the chmod popup
 pub fn handle_chmod_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
     match key_event.code {
-        KeyCode::Backspace => { if !context.input.is_empty() { context.input.pop(); } }
+        KeyCode::Backspace => {
+            if !context.input.is_empty() {
+                context.input.pop();
+            }
+        }
         KeyCode::Enter => {
             let input = context.input.clone();
             let mode = u32::from_str_radix(&input, 8);
@@ -137,11 +159,15 @@ pub fn handle_chmod_popup_event(context: &mut Context, key_event: KeyEvent) -> E
                 Ok(m) if m <= 0o7777 => {
                     if let Some(item) = context.active().get_selected_item() {
                         let name = item.trim_end_matches('/').to_string();
-                        let path = context.active().backend.join_path(&context.active().path, &name);
+                        let path = context
+                            .active()
+                            .backend
+                            .join_path(&context.active().path, &name);
                         match context.active().backend.chmod(&path, m) {
                             Ok(()) => {
                                 context.active_mut().invalidate_directory_cache();
-                                context.set_status_message(&format!("Permissions changed to {:o}", m));
+                                context
+                                    .set_status_message(&format!("Permissions changed to {:o}", m));
                             }
                             Err(e) => {
                                 context.set_status_message(&format!("chmod failed: {}", e));
@@ -163,7 +189,9 @@ pub fn handle_chmod_popup_event(context: &mut Context, key_event: KeyEvent) -> E
             context.set_input(String::default());
         }
         KeyCode::Char(c) if c.is_ascii_digit() && c < '8' => {
-            if context.input.len() < 4 { context.input.push(c); }
+            if context.input.len() < 4 {
+                context.input.push(c);
+            }
         }
         _ => {}
     }

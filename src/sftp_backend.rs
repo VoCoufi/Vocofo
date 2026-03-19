@@ -33,17 +33,21 @@ impl SftpBackend {
         key_path: Option<&str>,
     ) -> io::Result<Self> {
         let tcp = TcpStream::connect((host, port))?;
-        let mut session = Session::new()
-            .map_err(|e| sftp_err("create session", e))?;
+        let mut session = Session::new().map_err(|e| sftp_err("create session", e))?;
         session.set_tcp_stream(tcp);
-        session.handshake()
+        session
+            .handshake()
             .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e.to_string()))?;
         session.set_timeout(30_000);
 
         // Try auth methods in order: key, password, ssh-agent
         // 1. Key-based auth (if key provided)
         if let Some(key) = key_path {
-            let passphrase = if password.is_empty() { None } else { Some(password) };
+            let passphrase = if password.is_empty() {
+                None
+            } else {
+                Some(password)
+            };
             let _ = session.userauth_pubkey_file(username, None, Path::new(key), passphrase);
         }
 
@@ -64,7 +68,8 @@ impl SftpBackend {
             ));
         }
 
-        let sftp = session.sftp()
+        let sftp = session
+            .sftp()
             .map_err(|e| sftp_err("open SFTP channel", e))?;
 
         Ok(Self {
@@ -87,10 +92,15 @@ fn filestat_to_fileinfo(name: &str, stat: &ssh2::FileStat) -> FileInfo {
     let is_dir = stat.is_dir();
     let is_file = stat.is_file();
     let size = stat.size.unwrap_or(0);
-    let modified = stat.mtime.map(|t| UNIX_EPOCH + std::time::Duration::from_secs(t));
+    let modified = stat
+        .mtime
+        .map(|t| UNIX_EPOCH + std::time::Duration::from_secs(t));
     let readonly = stat.perm.map(|p| p & 0o200 == 0).unwrap_or(false);
 
-    let is_symlink = stat.perm.map(|p| (p & 0o170000) == 0o120000).unwrap_or(false);
+    let is_symlink = stat
+        .perm
+        .map(|p| (p & 0o170000) == 0o120000)
+        .unwrap_or(false);
 
     FileInfo {
         name: name.to_string(),
@@ -115,12 +125,14 @@ impl FilesystemBackend for SftpBackend {
 
     fn list_dir(&self, path: &str) -> io::Result<Vec<DirEntry>> {
         let sftp = self.sftp.lock().map_err(|e| sftp_err("lock", e))?;
-        let entries = sftp.readdir(Path::new(path))
+        let entries = sftp
+            .readdir(Path::new(path))
             .map_err(|e| sftp_err("list directory", e))?;
 
         let mut result = Vec::new();
         for (pathbuf, stat) in entries {
-            let name = pathbuf.file_name()
+            let name = pathbuf
+                .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
             if name == "." || name == ".." {
@@ -136,9 +148,11 @@ impl FilesystemBackend for SftpBackend {
 
     fn metadata(&self, path: &str) -> io::Result<FileInfo> {
         let sftp = self.sftp.lock().map_err(|e| sftp_err("lock", e))?;
-        let stat = sftp.stat(Path::new(path))
+        let stat = sftp
+            .stat(Path::new(path))
             .map_err(|e| sftp_err("read metadata", e))?;
-        let name = Path::new(path).file_name()
+        let name = Path::new(path)
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         Ok(filestat_to_fileinfo(&name, &stat))
@@ -151,14 +165,16 @@ impl FilesystemBackend for SftpBackend {
 
     fn canonicalize(&self, path: &str) -> io::Result<String> {
         let sftp = self.sftp.lock().map_err(|e| sftp_err("lock", e))?;
-        let real = sftp.realpath(Path::new(path))
+        let real = sftp
+            .realpath(Path::new(path))
             .map_err(|e| sftp_err("resolve path", e))?;
         Ok(real.to_string_lossy().to_string())
     }
 
     fn read_file(&self, path: &str, max_bytes: usize) -> io::Result<Vec<u8>> {
         let sftp = self.sftp.lock().map_err(|e| sftp_err("lock", e))?;
-        let mut file = sftp.open(Path::new(path))
+        let mut file = sftp
+            .open(Path::new(path))
             .map_err(|e| sftp_err("open file", e))?;
         let mut buffer = vec![0u8; max_bytes.min(1024 * 1024)]; // cap at 1MB
         let bytes_read = file.read(&mut buffer)?;
@@ -168,7 +184,8 @@ impl FilesystemBackend for SftpBackend {
 
     fn write_file(&self, path: &str, data: &[u8]) -> io::Result<()> {
         let sftp = self.sftp.lock().map_err(|e| sftp_err("lock", e))?;
-        let mut file = sftp.create(Path::new(path))
+        let mut file = sftp
+            .create(Path::new(path))
             .map_err(|e| sftp_err("create file", e))?;
         file.write_all(data)?;
         Ok(())

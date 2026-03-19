@@ -1,3 +1,4 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use std::fs;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -7,7 +8,6 @@ use vocofo::context::{ConnectDialogState, ConnectionProtocol, Context, UiState};
 use vocofo::event_handler;
 use vocofo::file_operation;
 use vocofo::local_backend::LocalBackend;
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent {
@@ -285,7 +285,10 @@ fn test_config_save_and_load() {
     assert_eq!(loaded.connections[0].host, "example.com");
     assert_eq!(loaded.connections[0].port, 22);
     assert_eq!(loaded.connections[0].username, "user");
-    assert_eq!(loaded.connections[0].key_path, Some("/home/user/.ssh/id_rsa".to_string()));
+    assert_eq!(
+        loaded.connections[0].key_path,
+        Some("/home/user/.ssh/id_rsa".to_string())
+    );
 }
 
 #[test]
@@ -349,16 +352,28 @@ fn test_f7_no_bookmarks_shows_message() {
 fn test_bookmark_list_navigation() {
     let mut ctx = Context::new().unwrap();
     ctx.config.connections.push(ConnectionProfile {
-        name: "srv1".to_string(), protocol: "sftp".to_string(),
-        host: "a.com".to_string(), port: 22, username: "u".to_string(), key_path: None,
+        name: "srv1".to_string(),
+        protocol: "sftp".to_string(),
+        host: "a.com".to_string(),
+        port: 22,
+        username: "u".to_string(),
+        key_path: None,
     });
     ctx.config.connections.push(ConnectionProfile {
-        name: "srv2".to_string(), protocol: "ftp".to_string(),
-        host: "b.com".to_string(), port: 21, username: "v".to_string(), key_path: None,
+        name: "srv2".to_string(),
+        protocol: "ftp".to_string(),
+        host: "b.com".to_string(),
+        port: 21,
+        username: "v".to_string(),
+        key_path: None,
     });
     ctx.config.connections.push(ConnectionProfile {
-        name: "srv3".to_string(), protocol: "sftp".to_string(),
-        host: "c.com".to_string(), port: 2222, username: "w".to_string(), key_path: None,
+        name: "srv3".to_string(),
+        protocol: "sftp".to_string(),
+        host: "c.com".to_string(),
+        port: 2222,
+        username: "w".to_string(),
+        key_path: None,
     });
 
     ctx.bookmark_selected = 0;
@@ -391,8 +406,12 @@ fn test_bookmark_list_navigation() {
 fn test_bookmark_list_esc_closes() {
     let mut ctx = Context::new().unwrap();
     ctx.config.connections.push(ConnectionProfile {
-        name: "srv".to_string(), protocol: "sftp".to_string(),
-        host: "h.com".to_string(), port: 22, username: "u".to_string(), key_path: None,
+        name: "srv".to_string(),
+        protocol: "sftp".to_string(),
+        host: "h.com".to_string(),
+        port: 22,
+        username: "u".to_string(),
+        key_path: None,
     });
     ctx.set_ui_state(UiState::BookmarkList);
 
@@ -450,12 +469,20 @@ fn test_bookmark_list_enter_ftp_profile() {
 fn test_bookmark_delete() {
     let mut ctx = Context::new().unwrap();
     ctx.config.connections.push(ConnectionProfile {
-        name: "srv1".to_string(), protocol: "sftp".to_string(),
-        host: "a.com".to_string(), port: 22, username: "u".to_string(), key_path: None,
+        name: "srv1".to_string(),
+        protocol: "sftp".to_string(),
+        host: "a.com".to_string(),
+        port: 22,
+        username: "u".to_string(),
+        key_path: None,
     });
     ctx.config.connections.push(ConnectionProfile {
-        name: "srv2".to_string(), protocol: "sftp".to_string(),
-        host: "b.com".to_string(), port: 22, username: "v".to_string(), key_path: None,
+        name: "srv2".to_string(),
+        protocol: "sftp".to_string(),
+        host: "b.com".to_string(),
+        port: 22,
+        username: "v".to_string(),
+        key_path: None,
     });
     ctx.bookmark_selected = 0;
     ctx.set_ui_state(UiState::BookmarkList);
@@ -470,8 +497,12 @@ fn test_bookmark_delete() {
 fn test_bookmark_delete_last_closes_list() {
     let mut ctx = Context::new().unwrap();
     ctx.config.connections.push(ConnectionProfile {
-        name: "only".to_string(), protocol: "sftp".to_string(),
-        host: "a.com".to_string(), port: 22, username: "u".to_string(), key_path: None,
+        name: "only".to_string(),
+        protocol: "sftp".to_string(),
+        host: "a.com".to_string(),
+        port: 22,
+        username: "u".to_string(),
+        key_path: None,
     });
     ctx.bookmark_selected = 0;
     ctx.set_ui_state(UiState::BookmarkList);
@@ -665,7 +696,9 @@ fn test_read_file_with_usize_max_does_not_oom() {
     fs::write(&file_path, "hello world").unwrap();
 
     let backend = LocalBackend::new();
-    let data = backend.read_file(&file_path.to_string_lossy(), usize::MAX).unwrap();
+    let data = backend
+        .read_file(&file_path.to_string_lossy(), usize::MAX)
+        .unwrap();
     assert_eq!(data, b"hello world");
 }
 
@@ -687,7 +720,9 @@ fn test_read_file_empty_file() {
     fs::write(&file_path, "").unwrap();
 
     let backend = LocalBackend::new();
-    let data = backend.read_file(&file_path.to_string_lossy(), usize::MAX).unwrap();
+    let data = backend
+        .read_file(&file_path.to_string_lossy(), usize::MAX)
+        .unwrap();
     assert!(data.is_empty());
 }
 
@@ -830,14 +865,20 @@ fn test_batch_delete_error_format() {
     ];
 
     let rx = vocofo::background_op::spawn_delete_batch_with_backend(
-        backend, paths, "Deleting...".to_string(),
+        backend,
+        paths,
+        "Deleting...".to_string(),
     );
 
     let result = rx.recv().unwrap();
     match result.result {
         Ok(()) => panic!("Expected error for nonexistent file"),
         Err(msg) => {
-            assert!(msg.contains("1 of 2 failed"), "Expected '1 of 2 failed' in: {}", msg);
+            assert!(
+                msg.contains("1 of 2 failed"),
+                "Expected '1 of 2 failed' in: {}",
+                msg
+            );
         }
     }
     // The existing file should have been deleted

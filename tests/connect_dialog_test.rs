@@ -1,6 +1,6 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use vocofo::context::{ConnectDialogState, ConnectionProtocol, Context, UiState};
 use vocofo::event_handler;
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent {
@@ -149,11 +149,17 @@ fn test_backtab_wraps_from_zero() {
 fn test_protocol_toggle_up() {
     let mut ctx = create_context_with_dialog();
     ctx.connect_dialog.as_mut().unwrap().focused_field = 0;
-    assert_eq!(ctx.connect_dialog.as_ref().unwrap().protocol, ConnectionProtocol::Sftp);
+    assert_eq!(
+        ctx.connect_dialog.as_ref().unwrap().protocol,
+        ConnectionProtocol::Sftp
+    );
     assert_eq!(ctx.connect_dialog.as_ref().unwrap().port, "22");
 
     event_handler::handle_connect_dialog_event(&mut ctx, key(KeyCode::Up)).unwrap();
-    assert_eq!(ctx.connect_dialog.as_ref().unwrap().protocol, ConnectionProtocol::Ftp);
+    assert_eq!(
+        ctx.connect_dialog.as_ref().unwrap().protocol,
+        ConnectionProtocol::Ftp
+    );
     assert_eq!(ctx.connect_dialog.as_ref().unwrap().port, "21");
 }
 
@@ -163,10 +169,16 @@ fn test_protocol_toggle_down() {
     ctx.connect_dialog.as_mut().unwrap().focused_field = 0;
 
     event_handler::handle_connect_dialog_event(&mut ctx, key(KeyCode::Down)).unwrap();
-    assert_eq!(ctx.connect_dialog.as_ref().unwrap().protocol, ConnectionProtocol::Ftp);
+    assert_eq!(
+        ctx.connect_dialog.as_ref().unwrap().protocol,
+        ConnectionProtocol::Ftp
+    );
 
     event_handler::handle_connect_dialog_event(&mut ctx, key(KeyCode::Down)).unwrap();
-    assert_eq!(ctx.connect_dialog.as_ref().unwrap().protocol, ConnectionProtocol::Sftp);
+    assert_eq!(
+        ctx.connect_dialog.as_ref().unwrap().protocol,
+        ConnectionProtocol::Sftp
+    );
     assert_eq!(ctx.connect_dialog.as_ref().unwrap().port, "22");
 }
 
@@ -240,7 +252,13 @@ fn test_enter_with_host_attempts_connection() {
 
     // Connection should fail — dialog stays open with error
     assert!(ctx.connect_dialog.is_some());
-    let err = ctx.connect_dialog.as_ref().unwrap().error_message.as_ref().unwrap();
+    let err = ctx
+        .connect_dialog
+        .as_ref()
+        .unwrap()
+        .error_message
+        .as_ref()
+        .unwrap();
     assert!(!err.is_empty());
 }
 
@@ -276,10 +294,7 @@ fn test_f5_opens_dialog() {
     assert!(ctx.connect_dialog.is_none());
     assert_eq!(ctx.get_ui_state(), Some(UiState::Normal));
 
-    event_handler::handle_main_event(
-        &mut ctx,
-        key(KeyCode::F(5)),
-    ).unwrap();
+    event_handler::handle_main_event(&mut ctx, key(KeyCode::F(5))).unwrap();
 
     assert!(ctx.connect_dialog.is_some());
     assert_eq!(ctx.get_ui_state(), Some(UiState::ConnectDialog));

@@ -86,7 +86,10 @@ fn test_get_selected_item_valid() {
     let (mut context, _temp) = create_test_context();
 
     // State 0 should be "../"
-    assert_eq!(context.panels[0].get_selected_item(), Some(&"../".to_string()));
+    assert_eq!(
+        context.panels[0].get_selected_item(),
+        Some(&"../".to_string())
+    );
 
     // Move to next item
     context.panels[0].increment_state();
@@ -140,7 +143,11 @@ fn test_set_copy_path_valid_item() {
     let (mut context, temp) = create_test_context();
 
     // Select file1.txt (should be at index after folders)
-    let file_idx = context.panels[0].items.iter().position(|i| i == "file1.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "file1.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
 
     context.set_copy_path();
@@ -154,7 +161,11 @@ fn test_set_copy_path_with_folder() {
     let (mut context, temp) = create_test_context();
 
     // Select folder1/
-    let folder_idx = context.panels[0].items.iter().position(|i| i == "folder1/").unwrap();
+    let folder_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "folder1/")
+        .unwrap();
     context.panels[0].state = folder_idx;
 
     context.set_copy_path();
@@ -170,7 +181,10 @@ fn test_set_copy_path_parent_directory() {
 
     // Select "../" (should be at index 0)
     context.panels[0].state = 0;
-    assert_eq!(context.panels[0].get_selected_item(), Some(&"../".to_string()));
+    assert_eq!(
+        context.panels[0].get_selected_item(),
+        Some(&"../".to_string())
+    );
 
     let before = context.copy_path.clone();
     context.set_copy_path();
@@ -228,7 +242,11 @@ fn test_get_metadata_selected_item_file() {
     let (mut context, _temp) = create_test_context();
 
     // Select a file
-    let file_idx = context.panels[0].items.iter().position(|i| i == "file1.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "file1.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
 
     let metadata = context.panels[0].get_metadata_selected_item();
@@ -244,7 +262,11 @@ fn test_get_metadata_selected_item_folder() {
     let (mut context, _temp) = create_test_context();
 
     // Select folder1/
-    let folder_idx = context.panels[0].items.iter().position(|i| i == "folder1/").unwrap();
+    let folder_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "folder1/")
+        .unwrap();
     context.panels[0].state = folder_idx;
 
     let metadata = context.panels[0].get_metadata_selected_item();

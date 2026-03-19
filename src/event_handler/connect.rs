@@ -81,15 +81,21 @@ pub fn handle_bookmark_list_event(context: &mut Context, key_event: KeyEvent) ->
             context.set_ui_state(UiState::Normal);
         }
         KeyCode::Up | KeyCode::Char('k') => {
-            if context.bookmark_selected > 0 { context.bookmark_selected -= 1; }
+            if context.bookmark_selected > 0 {
+                context.bookmark_selected -= 1;
+            }
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            if context.bookmark_selected + 1 < count { context.bookmark_selected += 1; }
+            if context.bookmark_selected + 1 < count {
+                context.bookmark_selected += 1;
+            }
         }
         KeyCode::Char('d') => {
             if context.bookmark_selected < count {
                 context.config.connections.remove(context.bookmark_selected);
-                if context.bookmark_selected >= context.config.connections.len() && context.bookmark_selected > 0 {
+                if context.bookmark_selected >= context.config.connections.len()
+                    && context.bookmark_selected > 0
+                {
                     context.bookmark_selected -= 1;
                 }
                 let _ = context.config.save();
@@ -127,7 +133,9 @@ pub fn handle_bookmark_name_event(context: &mut Context, key_event: KeyEvent) ->
             context.set_input(String::default());
             context.set_ui_state(UiState::ConnectDialog);
         }
-        KeyCode::Backspace => { context.input.pop(); }
+        KeyCode::Backspace => {
+            context.input.pop();
+        }
         KeyCode::Enter => {
             let name = context.input.clone();
             if name.is_empty() {
@@ -143,7 +151,11 @@ pub fn handle_bookmark_name_event(context: &mut Context, key_event: KeyEvent) ->
                     ConnectionProtocol::Sftp => 22,
                     ConnectionProtocol::Ftp => 21,
                 });
-                let key_path = if dialog.key_path.is_empty() { None } else { Some(dialog.key_path.clone()) };
+                let key_path = if dialog.key_path.is_empty() {
+                    None
+                } else {
+                    Some(dialog.key_path.clone())
+                };
                 let profile = crate::config::ConnectionProfile {
                     name: name.clone(),
                     protocol: protocol.to_string(),
@@ -159,7 +171,9 @@ pub fn handle_bookmark_name_event(context: &mut Context, key_event: KeyEvent) ->
             context.set_input(String::default());
             context.set_ui_state(UiState::ConnectDialog);
         }
-        KeyCode::Char(c) => { context.input.push(c); }
+        KeyCode::Char(c) => {
+            context.input.push(c);
+        }
         _ => {}
     }
     Ok(())
@@ -192,13 +206,27 @@ fn attempt_connection(context: &mut Context) {
         ConnectionProtocol::Sftp => {
             #[cfg(feature = "sftp")]
             {
-                let key = if dialog.key_path.is_empty() { None } else { Some(dialog.key_path.as_str()) };
+                let key = if dialog.key_path.is_empty() {
+                    None
+                } else {
+                    Some(dialog.key_path.as_str())
+                };
                 match crate::sftp_backend::SftpBackend::connect(
-                    &dialog.host, port, &dialog.username, &dialog.password, key,
+                    &dialog.host,
+                    port,
+                    &dialog.username,
+                    &dialog.password,
+                    key,
                 ) {
                     Ok(b) => Ok(Arc::new(b) as Arc<dyn crate::backend::FilesystemBackend>),
                     Err(sftp_err) => {
-                        match connect_scp_fallback(&dialog.host, port, &dialog.username, &dialog.password, key) {
+                        match connect_scp_fallback(
+                            &dialog.host,
+                            port,
+                            &dialog.username,
+                            &dialog.password,
+                            key,
+                        ) {
                             Ok(b) => Ok(b),
                             Err(_) => Err(sftp_err.to_string()),
                         }
@@ -206,30 +234,45 @@ fn attempt_connection(context: &mut Context) {
                 }
             }
             #[cfg(not(feature = "sftp"))]
-            { Err("SFTP support not compiled (enable 'sftp' feature)".to_string()) }
+            {
+                Err("SFTP support not compiled (enable 'sftp' feature)".to_string())
+            }
         }
         ConnectionProtocol::Ftp => {
             #[cfg(feature = "ftp")]
             {
-                crate::ftp_backend::FtpBackend::connect(&dialog.host, port, &dialog.username, &dialog.password)
-                    .map(|b| Arc::new(b) as Arc<dyn crate::backend::FilesystemBackend>)
-                    .map_err(|e| e.to_string())
+                crate::ftp_backend::FtpBackend::connect(
+                    &dialog.host,
+                    port,
+                    &dialog.username,
+                    &dialog.password,
+                )
+                .map(|b| Arc::new(b) as Arc<dyn crate::backend::FilesystemBackend>)
+                .map_err(|e| e.to_string())
             }
             #[cfg(not(feature = "ftp"))]
-            { Err("FTP support not compiled (enable 'ftp' feature)".to_string()) }
+            {
+                Err("FTP support not compiled (enable 'ftp' feature)".to_string())
+            }
         }
     };
 
     match result {
         Ok(backend) => {
-            let initial_path = backend.canonicalize(".").unwrap_or_else(|_| "/".to_string());
+            let initial_path = backend
+                .canonicalize(".")
+                .unwrap_or_else(|_| "/".to_string());
             let is_scp = backend.display_name().starts_with("SCP");
             context.active_mut().backend = backend;
             context.active_mut().path = initial_path;
             context.active_mut().invalidate_directory_cache();
             context.connect_dialog = None;
             context.set_ui_state(UiState::Normal);
-            context.set_status_message(if is_scp { "Connected (SCP mode)" } else { "Connected" });
+            context.set_status_message(if is_scp {
+                "Connected (SCP mode)"
+            } else {
+                "Connected"
+            });
         }
         Err(e) => {
             if let Some(d) = context.connect_dialog.as_mut() {
@@ -241,10 +284,14 @@ fn attempt_connection(context: &mut Context) {
 
 #[cfg(feature = "sftp")]
 fn connect_scp_fallback(
-    host: &str, port: u16, username: &str, password: &str, key_path: Option<&str>,
+    host: &str,
+    port: u16,
+    username: &str,
+    password: &str,
+    key_path: Option<&str>,
 ) -> Result<Arc<dyn crate::backend::FilesystemBackend>, String> {
-    use std::net::TcpStream;
     use ssh2::Session;
+    use std::net::TcpStream;
 
     let tcp = TcpStream::connect((host, port)).map_err(|e| e.to_string())?;
     let mut session = Session::new().map_err(|e| e.to_string())?;
@@ -253,7 +300,11 @@ fn connect_scp_fallback(
     session.set_timeout(30_000);
 
     if let Some(key) = key_path {
-        let passphrase = if password.is_empty() { None } else { Some(password) };
+        let passphrase = if password.is_empty() {
+            None
+        } else {
+            Some(password)
+        };
         let _ = session.userauth_pubkey_file(username, None, std::path::Path::new(key), passphrase);
     }
     if !session.authenticated() && !password.is_empty() {
@@ -275,6 +326,7 @@ fn connect_scp_fallback(
         key_path: key_path.map(|s| s.to_string()),
     };
 
-    Ok(Arc::new(crate::scp_backend::ScpBackend::from_session(session, params))
-        as Arc<dyn crate::backend::FilesystemBackend>)
+    Ok(Arc::new(crate::scp_backend::ScpBackend::from_session(
+        session, params,
+    )) as Arc<dyn crate::backend::FilesystemBackend>)
 }

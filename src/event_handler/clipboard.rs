@@ -5,7 +5,11 @@ use crate::context::{Context, UiState};
 use crate::file_operation;
 
 pub fn handle_copy_or_cut(context: &mut Context, mode: crate::context::ClipboardMode) {
-    let label = if mode == crate::context::ClipboardMode::Cut { "Cut" } else { "Copied" };
+    let label = if mode == crate::context::ClipboardMode::Cut {
+        "Cut"
+    } else {
+        "Copied"
+    };
 
     context.copy_source_backend = Some(Arc::clone(&context.active().backend));
 
@@ -13,7 +17,11 @@ pub fn handle_copy_or_cut(context: &mut Context, mode: crate::context::Clipboard
         context.copy_paths = context.active().get_selected_paths();
         context.copy_path = String::default();
         context.clipboard_mode = mode;
-        context.set_status_message(&format!("{} {} items to clipboard", label, context.copy_paths.len()));
+        context.set_status_message(&format!(
+            "{} {} items to clipboard",
+            label,
+            context.copy_paths.len()
+        ));
     } else {
         context.set_copy_path();
         context.copy_paths.clear();
@@ -29,7 +37,9 @@ pub fn handle_paste(context: &mut Context) {
     }
 
     let is_cut = context.clipboard_mode == crate::context::ClipboardMode::Cut;
-    let src_backend = context.copy_source_backend.clone()
+    let src_backend = context
+        .copy_source_backend
+        .clone()
         .unwrap_or_else(|| Arc::clone(&context.active().backend));
     let dst_backend = Arc::clone(&context.active().backend);
 
@@ -39,7 +49,9 @@ pub fn handle_paste(context: &mut Context) {
             Some(d) => d,
             None => return,
         };
-        let items: Vec<(String, String)> = context.copy_paths.iter()
+        let items: Vec<(String, String)> = context
+            .copy_paths
+            .iter()
             .map(|from| {
                 let name = src_backend.file_name(from).unwrap_or_default();
                 let to = dst_backend.join_path(&dest_dir, &name);
@@ -52,7 +64,12 @@ pub fn handle_paste(context: &mut Context) {
         let progress = Arc::new(crate::background_op::TransferProgress::new());
         context.transfer_progress = Some(Arc::clone(&progress));
         let rx = background_op::spawn_copy_batch_with_backend(
-            src_backend, dst_backend, items, desc.clone(), is_cut, Some(progress),
+            src_backend,
+            dst_backend,
+            items,
+            desc.clone(),
+            is_cut,
+            Some(progress),
         );
         context.start_operation(rx, desc);
         return;
@@ -108,11 +125,14 @@ fn resolve_paste_dest_dir(context: &mut Context) -> Option<String> {
 }
 
 fn spawn_paste_operation(context: &mut Context, from: String, to: String, is_cut: bool) {
-    let src_backend = context.copy_source_backend.clone()
+    let src_backend = context
+        .copy_source_backend
+        .clone()
         .unwrap_or_else(|| Arc::clone(&context.active().backend));
     let dst_backend = Arc::clone(&context.active().backend);
 
-    let name = src_backend.file_name(&from)
+    let name = src_backend
+        .file_name(&from)
         .unwrap_or_else(|| "item".to_string());
 
     let progress = Arc::new(crate::background_op::TransferProgress::new());
@@ -120,13 +140,23 @@ fn spawn_paste_operation(context: &mut Context, from: String, to: String, is_cut
     let (desc, rx) = if is_cut {
         let desc = format!("Moving {}...", name);
         let rx = background_op::spawn_move_with_backend(
-            src_backend, dst_backend, from, to, desc.clone(), Some(progress),
+            src_backend,
+            dst_backend,
+            from,
+            to,
+            desc.clone(),
+            Some(progress),
         );
         (desc, rx)
     } else {
         let desc = format!("Copying {}...", name);
         let rx = background_op::spawn_copy_with_backend(
-            src_backend, dst_backend, from, to, desc.clone(), Some(progress),
+            src_backend,
+            dst_backend,
+            from,
+            to,
+            desc.clone(),
+            Some(progress),
         );
         (desc, rx)
     };

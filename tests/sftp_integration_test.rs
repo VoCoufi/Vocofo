@@ -101,8 +101,8 @@ LogLevel ERROR
             user = whoami,
         );
 
-        let mut f = fs::File::create(&sshd_config)
-            .map_err(|e| format!("write sshd_config: {}", e))?;
+        let mut f =
+            fs::File::create(&sshd_config).map_err(|e| format!("write sshd_config: {}", e))?;
         f.write_all(config_content.as_bytes())
             .map_err(|e| format!("write sshd_config: {}", e))?;
 
@@ -130,10 +130,14 @@ LogLevel ERROR
             let mut proc = sshd_process;
             let _ = proc.kill();
             let output = proc.wait_with_output().ok();
-            let stderr = output.as_ref()
+            let stderr = output
+                .as_ref()
                 .map(|o| String::from_utf8_lossy(&o.stderr).to_string())
                 .unwrap_or_default();
-            return Err(format!("sshd did not start on port {}. stderr: {}", port, stderr));
+            return Err(format!(
+                "sshd did not start on port {}. stderr: {}",
+                port, stderr
+            ));
         }
 
         let backend = SftpBackend::connect(
@@ -142,7 +146,8 @@ LogLevel ERROR
             &whoami,
             "",
             Some(&user_key.to_string_lossy()),
-        ).map_err(|e| format!("SFTP connect: {}", e))?;
+        )
+        .map_err(|e| format!("SFTP connect: {}", e))?;
 
         Ok(Self {
             backend,
@@ -182,12 +187,18 @@ fn test_sftp_all_operations() {
     assert_eq!(b.join_path("/home/", "user"), "/home/user");
 
     // --- parent_path ---
-    assert_eq!(b.parent_path("/home/user/file.txt"), Some("/home/user".to_string()));
+    assert_eq!(
+        b.parent_path("/home/user/file.txt"),
+        Some("/home/user".to_string())
+    );
     assert_eq!(b.parent_path("/home"), Some("/".to_string()));
     assert_eq!(b.parent_path("/"), None);
 
     // --- file_name ---
-    assert_eq!(b.file_name("/home/user/file.txt"), Some("file.txt".to_string()));
+    assert_eq!(
+        b.file_name("/home/user/file.txt"),
+        Some("file.txt".to_string())
+    );
     assert_eq!(b.file_name("/dir/"), Some("dir".to_string()));
 
     // --- create_file ---
@@ -248,7 +259,10 @@ fn test_sftp_all_operations() {
     // --- canonicalize ---
     let dotdot = format!("{}/subdir/..", base);
     let canonical = b.canonicalize(&dotdot).unwrap();
-    let expected = fs::canonicalize(&base).unwrap().to_string_lossy().to_string();
+    let expected = fs::canonicalize(&base)
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
     assert_eq!(canonical, expected);
 
     // --- rename ---
@@ -277,15 +291,22 @@ fn test_sftp_all_operations() {
     let dst_dir = format!("{}/dst_copy", base);
     b.copy_dir(&src_dir, &dst_dir).unwrap();
     assert!(std::path::Path::new(&dst_dir).is_dir());
-    assert_eq!(fs::read_to_string(format!("{}/a.txt", dst_dir)).unwrap(), "aaa");
-    assert_eq!(fs::read_to_string(format!("{}/b.txt", dst_dir)).unwrap(), "bbb");
+    assert_eq!(
+        fs::read_to_string(format!("{}/a.txt", dst_dir)).unwrap(),
+        "aaa"
+    );
+    assert_eq!(
+        fs::read_to_string(format!("{}/b.txt", dst_dir)).unwrap(),
+        "bbb"
+    );
 
     // --- remove_dir_all ---
     let rmdir = format!("{}/to_remove", base);
     b.create_dir(&rmdir).unwrap();
     b.write_file(&format!("{}/x.txt", rmdir), b"x").unwrap();
     b.create_dir(&format!("{}/nested", rmdir)).unwrap();
-    b.write_file(&format!("{}/nested/y.txt", rmdir), b"y").unwrap();
+    b.write_file(&format!("{}/nested/y.txt", rmdir), b"y")
+        .unwrap();
 
     b.remove_dir_all(&rmdir).unwrap();
     assert!(!std::path::Path::new(&rmdir).exists());

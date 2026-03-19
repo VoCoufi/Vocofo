@@ -1,8 +1,8 @@
 use std::fs;
 use std::sync::Arc;
 use tempfile::TempDir;
-use vocofo::background_op;
 use vocofo::backend::FilesystemBackend;
+use vocofo::background_op;
 use vocofo::context::Context;
 use vocofo::file_operation;
 use vocofo::local_backend::LocalBackend;
@@ -27,7 +27,11 @@ fn test_resolve_paste_paths_detects_existing_target() {
     context.panels[0].path = source.to_string_lossy().to_string();
     file_operation::list_children(&mut context.panels[0]).unwrap();
 
-    let file_idx = context.panels[0].items.iter().position(|i| i == "file.txt").unwrap();
+    let file_idx = context.panels[0]
+        .items
+        .iter()
+        .position(|i| i == "file.txt")
+        .unwrap();
     context.panels[0].state = file_idx;
     context.set_copy_path();
 
@@ -40,8 +44,22 @@ fn test_resolve_paste_paths_detects_existing_target() {
 
     // Target exists
     assert!(std::path::Path::new(&to).exists());
-    assert_eq!(std::path::Path::new(&from).file_name().unwrap().to_str().unwrap(), "file.txt");
-    assert_eq!(std::path::Path::new(&to).file_name().unwrap().to_str().unwrap(), "file.txt");
+    assert_eq!(
+        std::path::Path::new(&from)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "file.txt"
+    );
+    assert_eq!(
+        std::path::Path::new(&to)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "file.txt"
+    );
 }
 
 #[test]
@@ -65,14 +83,21 @@ fn test_overwrite_after_delete_target() {
     let from = source.join("file.txt").to_string_lossy().to_string();
     let to = dest.join("file.txt").to_string_lossy().to_string();
     let rx = background_op::spawn_copy_with_backend(
-        Arc::clone(&backend), Arc::clone(&backend),
-        from, to, "test".to_string(), None,
+        Arc::clone(&backend),
+        Arc::clone(&backend),
+        from,
+        to,
+        "test".to_string(),
+        None,
     );
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
 
     // File should have new content
-    assert_eq!(fs::read_to_string(dest.join("file.txt")).unwrap(), "new content");
+    assert_eq!(
+        fs::read_to_string(dest.join("file.txt")).unwrap(),
+        "new content"
+    );
 }
 
 #[test]
