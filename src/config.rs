@@ -1,14 +1,27 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct Config {
     pub general: GeneralConfig,
+    #[serde(default)]
+    pub connections: Vec<ConnectionProfile>,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct ConnectionProfile {
+    pub name: String,
+    pub protocol: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    #[serde(default)]
+    pub key_path: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct GeneralConfig {
     pub show_hidden: bool,
@@ -20,6 +33,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             general: GeneralConfig::default(),
+            connections: Vec::new(),
         }
     }
 }
