@@ -55,7 +55,7 @@ brew install libssh2 openssl
 ```
 
 ```bash
-git clone https://gitlab.com/Coufik/Vocofo.git
+git clone https://github.com/VoCoufi/Vocofo.git
 cd Vocofo
 cargo install --path .
 ```
@@ -196,4 +196,4 @@ Built with [ratatui](https://github.com/ratatui-org/ratatui), [crossterm](https:
 
 ---
 
-For issues and suggestions: [GitLab Issues](https://gitlab.com/Coufik/Vocofo/-/issues)
+For issues and suggestions: [GitHub Issues](https://github.com/VoCoufi/Vocofo/issues)
