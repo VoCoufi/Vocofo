@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::background_op;
 use crate::context::{Context, UiState};
 use crate::file_operation;
@@ -95,8 +97,10 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
         }
         (KeyCode::Char('='), _) => {
             let path = context.active().path.clone();
+            let backend = Arc::clone(&context.active().backend);
             let other = 1 - context.active_panel;
             context.panels[other].path = path;
+            context.panels[other].backend = backend;
             context.panels[other].invalidate_directory_cache();
             context.panels[other].clear_filter();
             context.set_status_message("Panels synced");
@@ -393,6 +397,9 @@ pub fn handle_overwrite_popup_event(context: &mut Context, key_event: KeyEvent) 
 fn handle_copy_or_cut(context: &mut Context, mode: crate::context::ClipboardMode) {
     let label = if mode == crate::context::ClipboardMode::Cut { "Cut" } else { "Copied" };
 
+    // Store the source backend for cross-backend transfers
+    context.copy_source_backend = Some(Arc::clone(&context.active().backend));
+
     if context.active().has_selection() {
         context.copy_paths = context.active().get_selected_paths();
         context.copy_path = String::default();
@@ -413,6 +420,9 @@ fn handle_paste(context: &mut Context) {
     }
 
     let is_cut = context.clipboard_mode == crate::context::ClipboardMode::Cut;
+    let src_backend = context.copy_source_backend.clone()
+        .unwrap_or_else(|| Arc::clone(&context.active().backend));
+    let dst_backend = Arc::clone(&context.active().backend);
 
     // Multi-file paste
     if !context.copy_paths.is_empty() {
@@ -420,17 +430,19 @@ fn handle_paste(context: &mut Context) {
             Some(d) => d,
             None => return,
         };
-        let items: Vec<(std::path::PathBuf, std::path::PathBuf)> = context.copy_paths.iter()
+        let items: Vec<(String, String)> = context.copy_paths.iter()
             .map(|from| {
-                let name = from.file_name().unwrap_or_default();
-                let to = dest_dir.join(name);
+                let name = src_backend.file_name(from).unwrap_or_default();
+                let to = dst_backend.join_path(&dest_dir, &name);
                 (from.clone(), to)
             })
             .collect();
         let count = items.len();
         let action = if is_cut { "Moving" } else { "Copying" };
         let desc = format!("{} {} items...", action, count);
-        let rx = background_op::spawn_copy_batch(items, desc.clone(), is_cut);
+        let rx = background_op::spawn_copy_batch_with_backend(
+            src_backend, dst_backend, items, desc.clone(), is_cut,
+        );
         context.start_operation(rx, desc);
         return;
     }
@@ -442,7 +454,7 @@ fn handle_paste(context: &mut Context) {
     }
     match file_operation::resolve_paste_paths(context) {
         Ok((from, to)) => {
-            if to.exists() {
+            if context.active().backend.exists(&to).unwrap_or(false) {
                 context.pending_paste = Some((from, to, is_cut));
                 context.confirm_popup_size = true;
                 context.set_ui_state(UiState::ConfirmOverwrite);
@@ -456,14 +468,16 @@ fn handle_paste(context: &mut Context) {
     }
 }
 
-fn resolve_paste_dest_dir(context: &mut Context) -> Option<std::path::PathBuf> {
+fn resolve_paste_dest_dir(context: &mut Context) -> Option<String> {
     let panel = context.active();
-    let base = std::path::PathBuf::from(&panel.path);
+    let base = panel.path.clone();
     if let Some(item) = panel.get_selected_item() {
         if panel.get_state() != 0 {
-            let full = base.join(item.trim_end_matches('/'));
-            if full.is_dir() {
-                return Some(full);
+            let full = panel.backend.join_path(&base, item.trim_end_matches('/'));
+            if let Ok(info) = panel.backend.metadata(&full) {
+                if info.is_dir {
+                    return Some(full);
+                }
             }
         }
     }
@@ -472,8 +486,9 @@ fn resolve_paste_dest_dir(context: &mut Context) -> Option<std::path::PathBuf> {
 
 fn execute_pending_paste(context: &mut Context) {
     if let Some((from, to, is_cut)) = context.pending_paste.take() {
-        if to.exists() {
-            if let Err(e) = file_operation::delete(&to) {
+        // Delete existing target before pasting
+        if context.active().backend.exists(&to).unwrap_or(false) {
+            if let Err(e) = file_operation::delete_with_backend(&context.active().backend, &to) {
                 context.set_status_message(&format!("Cannot remove existing file: {}", e));
                 return;
             }
@@ -484,21 +499,28 @@ fn execute_pending_paste(context: &mut Context) {
 
 fn spawn_paste_operation(
     context: &mut Context,
-    from: std::path::PathBuf,
-    to: std::path::PathBuf,
+    from: String,
+    to: String,
     is_cut: bool,
 ) {
-    let name = from.file_name()
-        .map(|n| n.to_string_lossy().to_string())
+    let src_backend = context.copy_source_backend.clone()
+        .unwrap_or_else(|| Arc::clone(&context.active().backend));
+    let dst_backend = Arc::clone(&context.active().backend);
+
+    let name = src_backend.file_name(&from)
         .unwrap_or_else(|| "item".to_string());
 
     let (desc, rx) = if is_cut {
         let desc = format!("Moving {}...", name);
-        let rx = background_op::spawn_move(from, to, desc.clone());
+        let rx = background_op::spawn_move_with_backend(
+            src_backend, dst_backend, from, to, desc.clone(),
+        );
         (desc, rx)
     } else {
         let desc = format!("Copying {}...", name);
-        let rx = background_op::spawn_copy(from, to, desc.clone());
+        let rx = background_op::spawn_copy_with_backend(
+            src_backend, dst_backend, from, to, desc.clone(),
+        );
         (desc, rx)
     };
     context.start_operation(rx, desc);
@@ -511,13 +533,14 @@ fn spawn_delete_operation(context: &mut Context) {
     }
 
     let panel = context.active();
+    let backend = Arc::clone(&panel.backend);
 
     // Batch delete if selection exists
     if panel.has_selection() {
         let paths = panel.get_selected_paths();
         let count = paths.len();
         let desc = format!("Deleting {} items...", count);
-        let rx = background_op::spawn_delete_batch(paths, desc.clone());
+        let rx = background_op::spawn_delete_batch_with_backend(backend, paths, desc.clone());
         context.start_operation(rx, desc);
         context.active_mut().clear_selection();
         return;
@@ -528,8 +551,8 @@ fn spawn_delete_operation(context: &mut Context) {
         None => return,
     };
 
-    let path = std::path::PathBuf::from(&panel.path).join(&selected);
+    let path = panel.backend.join_path(&panel.path, &selected);
     let desc = format!("Deleting {}...", selected);
-    let rx = background_op::spawn_delete(path, desc.clone());
+    let rx = background_op::spawn_delete_with_backend(backend, path, desc.clone());
     context.start_operation(rx, desc);
 }

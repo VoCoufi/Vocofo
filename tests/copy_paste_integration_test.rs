@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::PathBuf;
 use tempfile::TempDir;
 use vocofo::background_op;
 use vocofo::context::{ClipboardMode, Context};
@@ -8,7 +9,7 @@ use vocofo::file_operation;
 fn paste_and_wait(context: &mut Context) -> Result<(), String> {
     let (from, to) = file_operation::resolve_paste_paths(context)
         .map_err(|e| e.to_string())?;
-    let rx = background_op::spawn_copy(from, to, "test".to_string());
+    let rx = background_op::spawn_copy(PathBuf::from(&from), PathBuf::from(&to), "test".to_string());
     let result = rx.recv().map_err(|e| e.to_string())?;
     result.result
 }
@@ -273,7 +274,7 @@ fn test_cut_move_file_workflow() {
 
     // Move via background op
     let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
-    let rx = background_op::spawn_move(from, to, "test move".to_string());
+    let rx = background_op::spawn_move(PathBuf::from(&from), PathBuf::from(&to), "test move".to_string());
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok(), "Move failed: {:?}", result.result.err());
     assert!(result.clear_clipboard);
@@ -312,7 +313,7 @@ fn test_cut_move_folder_workflow() {
     context.panels[0].state = 0;
 
     let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
-    let rx = background_op::spawn_move(from, to, "test move folder".to_string());
+    let rx = background_op::spawn_move(PathBuf::from(&from), PathBuf::from(&to), "test move folder".to_string());
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok(), "Move folder failed: {:?}", result.result.err());
 

@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::thread;
 use std::{fs, io};
 
+use crate::backend::FilesystemBackend;
 use crate::file_operation;
 
 pub struct FileOpResult {
@@ -24,6 +26,210 @@ pub fn spawn_copy(from: PathBuf, to: PathBuf, description: String) -> mpsc::Rece
     });
     rx
 }
+
+/// Spawn a copy operation using backends (supports cross-backend transfers)
+pub fn spawn_copy_with_backend(
+    src_backend: Arc<dyn FilesystemBackend>,
+    dst_backend: Arc<dyn FilesystemBackend>,
+    from: String,
+    to: String,
+    description: String,
+) -> mpsc::Receiver<FileOpResult> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = if Arc::ptr_eq(&src_backend, &dst_backend) {
+            // Same backend: use native copy
+            let info = src_backend.metadata(&from)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>);
+            match info {
+                Ok(info) if info.is_dir => src_backend.copy_dir(&from, &to)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
+                Ok(_) => src_backend.copy_file(&from, &to)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
+                Err(e) => Err(e),
+            }
+        } else {
+            // Cross-backend: read from source, write to destination
+            cross_backend_copy(&src_backend, &dst_backend, &from, &to)
+        };
+        let _ = tx.send(FileOpResult {
+            description,
+            result: result.map_err(|e| e.to_string()),
+            clear_clipboard: false,
+        });
+    });
+    rx
+}
+
+/// Spawn a move operation using backends
+pub fn spawn_move_with_backend(
+    src_backend: Arc<dyn FilesystemBackend>,
+    dst_backend: Arc<dyn FilesystemBackend>,
+    from: String,
+    to: String,
+    description: String,
+) -> mpsc::Receiver<FileOpResult> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = move_with_backend_inner(&src_backend, &dst_backend, &from, &to);
+        let _ = tx.send(FileOpResult {
+            description,
+            result: result.map_err(|e| e.to_string()),
+            clear_clipboard: true,
+        });
+    });
+    rx
+}
+
+/// Spawn a delete operation using a backend
+pub fn spawn_delete_with_backend(
+    backend: Arc<dyn FilesystemBackend>,
+    path: String,
+    description: String,
+) -> mpsc::Receiver<FileOpResult> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = file_operation::delete_with_backend(&backend, &path);
+        let _ = tx.send(FileOpResult {
+            description,
+            result: result.map_err(|e| e.to_string()),
+            clear_clipboard: false,
+        });
+    });
+    rx
+}
+
+/// Spawn a batch delete operation using a backend
+pub fn spawn_delete_batch_with_backend(
+    backend: Arc<dyn FilesystemBackend>,
+    paths: Vec<String>,
+    description: String,
+) -> mpsc::Receiver<FileOpResult> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut errors = Vec::new();
+        for path in &paths {
+            if let Err(e) = file_operation::delete_with_backend(&backend, path) {
+                errors.push(format!("{}: {}", path, e));
+            }
+        }
+        let result = if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join(", "))
+        };
+        let _ = tx.send(FileOpResult {
+            description,
+            result,
+            clear_clipboard: false,
+        });
+    });
+    rx
+}
+
+/// Spawn a batch copy/move operation using backends
+pub fn spawn_copy_batch_with_backend(
+    src_backend: Arc<dyn FilesystemBackend>,
+    dst_backend: Arc<dyn FilesystemBackend>,
+    items: Vec<(String, String)>,
+    description: String,
+    is_move: bool,
+) -> mpsc::Receiver<FileOpResult> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut errors = Vec::new();
+        for (from, to) in &items {
+            let copy_result = if Arc::ptr_eq(&src_backend, &dst_backend) {
+                let info = match src_backend.metadata(from) {
+                    Ok(i) => i,
+                    Err(e) => { errors.push(format!("{}: {}", from, e)); continue; }
+                };
+                if info.is_dir {
+                    src_backend.copy_dir(from, to)
+                } else {
+                    src_backend.copy_file(from, to)
+                }.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+            } else {
+                cross_backend_copy(&src_backend, &dst_backend, from, to)
+            };
+
+            if let Err(e) = copy_result {
+                errors.push(format!("{}: {}", from, e));
+                continue;
+            }
+            if is_move {
+                if let Err(e) = file_operation::delete_with_backend(&src_backend, from) {
+                    errors.push(format!("delete {}: {}", from, e));
+                }
+            }
+        }
+        let result = if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join(", "))
+        };
+        let _ = tx.send(FileOpResult {
+            description,
+            result,
+            clear_clipboard: is_move,
+        });
+    });
+    rx
+}
+
+fn move_with_backend_inner(
+    src_backend: &Arc<dyn FilesystemBackend>,
+    dst_backend: &Arc<dyn FilesystemBackend>,
+    from: &str,
+    to: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if Arc::ptr_eq(src_backend, dst_backend) {
+        // Same backend: try rename first, fallback to copy+delete
+        if src_backend.rename(from, to).is_ok() {
+            return Ok(());
+        }
+        let info = src_backend.metadata(from)?;
+        if info.is_dir {
+            src_backend.copy_dir(from, to)?;
+            src_backend.remove_dir_all(from)?;
+        } else {
+            src_backend.copy_file(from, to)?;
+            src_backend.remove_file(from)?;
+        }
+    } else {
+        // Cross-backend: copy then delete source
+        cross_backend_copy(src_backend, dst_backend, from, to)?;
+        file_operation::delete_with_backend(src_backend, from)?;
+    }
+    Ok(())
+}
+
+/// Cross-backend copy: read from source backend, write to destination backend
+fn cross_backend_copy(
+    src: &Arc<dyn FilesystemBackend>,
+    dst: &Arc<dyn FilesystemBackend>,
+    from: &str,
+    to: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let info = src.metadata(from)?;
+
+    if info.is_dir {
+        dst.create_dir(to)?;
+        let entries = src.list_dir(from)?;
+        for entry in entries {
+            let src_child = src.join_path(from, &entry.name);
+            let dst_child = dst.join_path(to, &entry.name);
+            cross_backend_copy(src, dst, &src_child, &dst_child)?;
+        }
+    } else {
+        let data = src.read_file(from, usize::MAX)?;
+        dst.write_file(to, &data)?;
+    }
+
+    Ok(())
+}
+
+// === Legacy functions kept for backward compatibility with existing tests ===
 
 /// Spawn a move (copy + delete) operation in a background thread
 pub fn spawn_move(from: PathBuf, to: PathBuf, description: String) -> mpsc::Receiver<FileOpResult> {

@@ -289,8 +289,8 @@ fn test_clipboard_bulk_paths() {
     let (mut context, _temp_dir) = create_test_context();
     let paths = context.panels[0].get_selected_paths();
     context.copy_paths = vec![
-        std::path::PathBuf::from("/tmp/a.txt"),
-        std::path::PathBuf::from("/tmp/b.txt"),
+        "/tmp/a.txt".to_string(),
+        "/tmp/b.txt".to_string(),
     ];
     assert_eq!(context.copy_paths.len(), 2);
     drop(paths);

@@ -133,7 +133,7 @@ fn test_get_selected_paths() {
 
     let paths = context.panels[0].get_selected_paths();
     assert_eq!(paths.len(), 1);
-    assert_eq!(paths[0], temp.path().join("file1.txt"));
+    assert_eq!(paths[0], temp.path().join("file1.txt").to_string_lossy().to_string());
 }
 
 #[test]
@@ -146,7 +146,7 @@ fn test_get_selected_paths_strips_trailing_slash() {
 
     let paths = context.panels[0].get_selected_paths();
     assert_eq!(paths.len(), 1);
-    assert_eq!(paths[0], temp.path().join("folder1"));
+    assert_eq!(paths[0], temp.path().join("folder1").to_string_lossy().to_string());
 }
 
 // ============================================================================

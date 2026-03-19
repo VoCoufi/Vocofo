@@ -1,8 +1,12 @@
 use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::TempDir;
+use vocofo::backend::FilesystemBackend;
 use vocofo::background_op;
 use vocofo::context::{ClipboardMode, Context};
 use vocofo::file_operation;
+use vocofo::local_backend::LocalBackend;
 
 /// Helper: create context with two separate temp directories for each panel
 fn create_dual_panel_context() -> (Context, TempDir, TempDir) {
@@ -210,7 +214,7 @@ fn test_cross_panel_copy_paste() {
 
     // Paste via background op
     let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
-    let rx = background_op::spawn_copy(from, to, "test".to_string());
+    let rx = background_op::spawn_copy(PathBuf::from(&from), PathBuf::from(&to), "test".to_string());
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
 
@@ -235,7 +239,7 @@ fn test_cross_panel_cut_move() {
 
     // Move via background op (copy + delete)
     let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
-    let rx = background_op::spawn_move(from, to, "test".to_string());
+    let rx = background_op::spawn_move(PathBuf::from(&from), PathBuf::from(&to), "test".to_string());
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
 
@@ -271,7 +275,7 @@ fn test_show_preview_toggle() {
 
 #[test]
 fn test_panel_state_new() {
-    let panel = vocofo::context::PanelState::new("/test/path".to_string());
+    let panel = vocofo::context::PanelState::new("/test/path".to_string(), Arc::new(LocalBackend::new()));
     assert_eq!(panel.path, "/test/path");
     assert!(panel.items.is_empty());
     assert_eq!(panel.state, 0);

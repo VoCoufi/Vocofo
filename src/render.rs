@@ -26,8 +26,11 @@ pub fn render_panel(frame: &mut Frame, area: Rect, panel: &mut PanelState, is_ac
             return ListItem::new(name.clone()).style(Style::new().blue());
         }
 
-        let full_path = std::path::PathBuf::from(&panel.path).join(name.trim_end_matches('/'));
-        let details = file_operation::format_item_details(&full_path);
+        let full_path = panel.backend.join_path(&panel.path, name.trim_end_matches('/'));
+        let details = match panel.backend.metadata(&full_path) {
+            Ok(info) => file_operation::format_item_details_from_info(&info),
+            Err(_) => String::new(),
+        };
 
         let is_selected = panel.selected.contains(name);
         let name_style = if is_selected {
@@ -292,8 +295,10 @@ pub fn popup_rename(frame: &mut Frame, context: &mut Context) -> RenderResult<()
 /// Renders an overwrite confirmation popup
 pub fn popup_confirm_overwrite(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
     let file_name = context.pending_paste.as_ref()
-        .and_then(|(_, to, _)| to.file_name())
-        .map(|n| n.to_string_lossy().to_string())
+        .and_then(|(_, to, _)| {
+            std::path::Path::new(to).file_name()
+                .map(|n| n.to_string_lossy().to_string())
+        })
         .unwrap_or_else(|| "file".to_string());
 
     let area = centered_rect_dialog(frame.area(), 80, 10);
