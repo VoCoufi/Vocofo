@@ -365,7 +365,12 @@ pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderR
         None => return Ok(()),
     };
 
-    let area = centered_rect_dialog(frame.area(), 90, 90);
+    let r = frame.area();
+    let width = (r.width * 70 / 100).clamp(40, 70);
+    let height = 22_u16.min(r.height.saturating_sub(2));
+    let x = (r.width.saturating_sub(width)) / 2;
+    let y = (r.height.saturating_sub(height)) / 2;
+    let area = Rect::new(r.x + x, r.y + y, width, height);
 
     let dialog_block = Block::default()
         .title(" Connect to Remote Server ")
@@ -377,24 +382,23 @@ pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderR
     frame.render_widget(Clear, area);
     frame.render_widget(dialog_block.clone(), area);
 
-    let inner_area = dialog_block.inner(area);
+    let inner = dialog_block.inner(area);
 
+    // Layout: protocol(1) + gap(1) + 5 fields(3 each=15) + gap(1) + hint(1) = 19 inner rows
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(1)
         .constraints([
-            Constraint::Length(1), // Protocol label + value
-            Constraint::Length(1), // spacing
-            Constraint::Length(3), // Host
-            Constraint::Length(3), // Port
-            Constraint::Length(3), // Username
-            Constraint::Length(3), // Password
-            Constraint::Length(3), // Key path
-            Constraint::Length(1), // spacing
-            Constraint::Length(1), // Error / hint
-            Constraint::Min(0),   // remaining
+            Constraint::Length(1), // 0: Protocol
+            Constraint::Length(1), // 1: spacing
+            Constraint::Length(3), // 2: Host
+            Constraint::Length(3), // 3: Port
+            Constraint::Length(3), // 4: Username
+            Constraint::Length(3), // 5: Password
+            Constraint::Length(3), // 6: Key path
+            Constraint::Length(1), // 7: Error / hint
+            Constraint::Min(0),   // 8: remaining
         ])
-        .split(inner_area);
+        .split(inner);
 
     let focused = dialog.focused_field;
 
@@ -408,10 +412,10 @@ pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderR
     } else {
         Style::default().fg(Color::White)
     };
-    let proto = Paragraph::new(format!("Protocol: {}", proto_text)).style(proto_style);
+    let proto = Paragraph::new(format!("  Protocol: {}", proto_text)).style(proto_style);
     frame.render_widget(proto, chunks[0]);
 
-    // Helper to render a field
+    // Render fields
     let fields = [
         ("Host", &dialog.host, false),
         ("Port", &dialog.port, false),
@@ -423,11 +427,7 @@ pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderR
     for (i, (label, value, is_password)) in fields.iter().enumerate() {
         let field_idx = i + 1;
         let is_focused = focused == field_idx;
-        let border_style = if is_focused {
-            Style::default().fg(Color::Cyan)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
+        let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
 
         let display_value = if *is_password && !value.is_empty() {
             "*".repeat(value.len())
@@ -435,12 +435,14 @@ pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderR
             (*value).clone()
         };
 
-        let para = Paragraph::new(display_value)
+        let cursor_suffix = if is_focused { "▎" } else { "" };
+
+        let para = Paragraph::new(format!("{}{}", display_value, cursor_suffix))
             .block(
                 Block::default()
                     .title(format!(" {} ", label))
                     .borders(Borders::ALL)
-                    .border_style(border_style)
+                    .border_style(Style::default().fg(border_color))
             )
             .style(if is_focused {
                 Style::default().fg(Color::White)
@@ -452,15 +454,14 @@ pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderR
     }
 
     // Error message or hint
-    let hint_area = chunks[8];
     if let Some(ref err) = dialog.error_message {
-        let err_para = Paragraph::new(err.as_str())
+        let err_para = Paragraph::new(format!("  {}", err))
             .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
-        frame.render_widget(err_para, hint_area);
+        frame.render_widget(err_para, chunks[7]);
     } else {
-        let hint = Paragraph::new("[Tab] Next field  [Enter] Connect  [Esc] Cancel")
+        let hint = Paragraph::new("  [Tab] Next  [↑↓] Protocol  [Enter] Connect  [Esc] Cancel")
             .style(Style::default().fg(Color::DarkGray));
-        frame.render_widget(hint, hint_area);
+        frame.render_widget(hint, chunks[7]);
     }
 
     Ok(())
