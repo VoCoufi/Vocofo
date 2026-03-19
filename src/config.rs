@@ -2,6 +2,47 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+/// Panel layout orientation
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum PanelLayout {
+    Auto,
+    Horizontal,
+    Vertical,
+}
+
+impl Default for PanelLayout {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+impl PanelLayout {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Auto => Self::Horizontal,
+            Self::Horizontal => Self::Vertical,
+            Self::Vertical => Self::Auto,
+        }
+    }
+
+    pub fn prev(self) -> Self {
+        match self {
+            Self::Auto => Self::Vertical,
+            Self::Horizontal => Self::Auto,
+            Self::Vertical => Self::Horizontal,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Horizontal => "Horizontal",
+            Self::Vertical => "Vertical",
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct Config {
@@ -27,6 +68,8 @@ pub struct GeneralConfig {
     pub show_hidden: bool,
     pub default_path: String,
     pub show_preview_on_start: bool,
+    #[serde(default)]
+    pub panel_layout: PanelLayout,
 }
 
 impl Default for Config {
@@ -44,6 +87,7 @@ impl Default for GeneralConfig {
             show_hidden: false,
             default_path: ".".to_string(),
             show_preview_on_start: false,
+            panel_layout: PanelLayout::default(),
         }
     }
 }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::background_op;
-use crate::context::{ConnectDialogState, ConnectionProtocol, Context, UiState};
+use crate::context::{ConnectDialogState, ConnectionProtocol, Context, SettingsState, UiState};
 use crate::file_operation;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -134,6 +134,11 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
             panel.invalidate_directory_cache();
             let state = if panel.show_hidden { "shown" } else { "hidden" };
             context.set_status_message(&format!("Hidden files {}", state));
+        }
+        (KeyCode::F(2), _) => {
+            let path = context.config.general.default_path.clone();
+            context.settings_state = Some(SettingsState::new(&path));
+            context.set_ui_state(UiState::SettingsPopup);
         }
         (KeyCode::F(3), _) => {
             context.show_preview = !context.show_preview;
@@ -589,6 +594,101 @@ pub fn handle_bookmark_name_event(context: &mut Context, key_event: KeyEvent) ->
         }
         KeyCode::Char(c) => {
             context.input.push(c);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Handles key events for the settings popup
+pub fn handle_settings_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+    let state = match context.settings_state.as_mut() {
+        Some(s) => s,
+        None => {
+            context.set_ui_state(UiState::Normal);
+            return Ok(());
+        }
+    };
+
+    // If editing path, handle typing
+    if state.editing_path {
+        match key_event.code {
+            KeyCode::Enter => {
+                context.config.general.default_path = state.path_input.clone();
+                state.editing_path = false;
+            }
+            KeyCode::Esc => {
+                state.path_input = context.config.general.default_path.clone();
+                state.editing_path = false;
+            }
+            KeyCode::Backspace => {
+                state.path_input.pop();
+            }
+            KeyCode::Char(c) => {
+                state.path_input.push(c);
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
+    match key_event.code {
+        KeyCode::Esc => {
+            // Save and close
+            let _ = context.config.save();
+            context.settings_state = None;
+            context.set_ui_state(UiState::Normal);
+            context.set_status_message("Settings saved");
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            if state.focused_field > 0 {
+                state.focused_field -= 1;
+            }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if state.focused_field + 1 < state.field_count() {
+                state.focused_field += 1;
+            }
+        }
+        KeyCode::Left | KeyCode::Right => {
+            match state.focused_field {
+                0 => {
+                    // Cycle panel layout
+                    context.config.general.panel_layout = if key_event.code == KeyCode::Right {
+                        context.config.general.panel_layout.next()
+                    } else {
+                        context.config.general.panel_layout.prev()
+                    };
+                }
+                _ => {}
+            }
+        }
+        KeyCode::Char(' ') | KeyCode::Enter => {
+            match state.focused_field {
+                0 => {
+                    context.config.general.panel_layout = context.config.general.panel_layout.next();
+                }
+                1 => {
+                    // Toggle hidden files
+                    let new_val = !context.config.general.show_hidden;
+                    context.config.general.show_hidden = new_val;
+                    context.panels[0].show_hidden = new_val;
+                    context.panels[1].show_hidden = new_val;
+                    context.panels[0].invalidate_directory_cache();
+                    context.panels[1].invalidate_directory_cache();
+                }
+                2 => {
+                    // Toggle preview on start
+                    context.config.general.show_preview_on_start = !context.config.general.show_preview_on_start;
+                }
+                3 => {
+                    // Start editing path
+                    if key_event.code == KeyCode::Enter {
+                        state.editing_path = true;
+                    }
+                }
+                _ => {}
+            }
         }
         _ => {}
     }

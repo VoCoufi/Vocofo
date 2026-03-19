@@ -20,7 +20,7 @@ pub fn ui(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
     render_title_bar(frame, &main_layout[0]);
     render_status_bar(frame, &main_layout[2], context);
 
-    let browser_layout = create_browser_layout(&main_layout[1]);
+    let browser_layout = create_browser_layout(&main_layout[1], context.config.general.panel_layout);
 
     render_directory_panels(frame, &browser_layout, context)?;
 
@@ -42,12 +42,17 @@ fn create_main_layout(area: Rect) -> Rc<[Rect]> {
 }
 
 /// Creates the file browser layout with two equal panels
-/// Stacks vertically when terminal is taller than wide, horizontally otherwise
-fn create_browser_layout(area: &Rect) -> Rc<[Rect]> {
-    let direction = if area.height > area.width {
-        Direction::Vertical
-    } else {
-        Direction::Horizontal
+fn create_browser_layout(area: &Rect, layout: crate::config::PanelLayout) -> Rc<[Rect]> {
+    let direction = match layout {
+        crate::config::PanelLayout::Horizontal => Direction::Horizontal,
+        crate::config::PanelLayout::Vertical => Direction::Vertical,
+        crate::config::PanelLayout::Auto => {
+            if area.height > area.width {
+                Direction::Vertical
+            } else {
+                Direction::Horizontal
+            }
+        }
     };
 
     Layout::default()
@@ -150,6 +155,7 @@ fn create_keyboard_shortcuts() -> String {
         ("Bksp", "Parent Dir"),
         (".", "Hidden"),
         ("F3", "Preview"),
+        ("F2", "Settings"),
         ("^M", "chmod"),
         ("F5", "Connect"),
         ("F6", "Disconnect"),
@@ -233,6 +239,7 @@ fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
         UiState::ConnectDialog => render::popup_connect_dialog(frame, context)?,
         UiState::BookmarkList => render::popup_bookmark_list(frame, context)?,
         UiState::BookmarkNameInput => render::popup_bookmark_name(frame, context)?,
+        UiState::SettingsPopup => render::popup_settings(frame, context)?,
         UiState::SearchMode | UiState::Normal => ()
     }
 

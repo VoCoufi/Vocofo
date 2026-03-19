@@ -250,6 +250,29 @@ pub enum UiState {
     ChmodPopup,
     BookmarkList,
     BookmarkNameInput,
+    SettingsPopup,
+}
+
+/// State for the settings popup
+#[derive(Debug, Clone)]
+pub struct SettingsState {
+    pub focused_field: usize, // 0=layout, 1=hidden, 2=preview, 3=default_path
+    pub editing_path: bool,
+    pub path_input: String,
+}
+
+impl SettingsState {
+    pub fn new(default_path: &str) -> Self {
+        Self {
+            focused_field: 0,
+            editing_path: false,
+            path_input: default_path.to_string(),
+        }
+    }
+
+    pub fn field_count(&self) -> usize {
+        4
+    }
 }
 
 // ConnectionProtocol and ConnectionParams are defined in backend.rs
@@ -322,6 +345,7 @@ pub struct Context {
     pub last_keepalive: Instant,
     pub bookmark_selected: usize,
     pub transfer_progress: Option<Arc<crate::background_op::TransferProgress>>,
+    pub settings_state: Option<SettingsState>,
 }
 
 impl Context {
@@ -361,6 +385,7 @@ impl Context {
             last_keepalive: Instant::now(),
             bookmark_selected: 0,
             transfer_progress: None,
+            settings_state: None,
         })
     }
 

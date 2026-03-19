@@ -493,6 +493,102 @@ pub fn popup_bookmark_name(frame: &mut Frame, context: &mut Context) -> RenderRe
     Ok(())
 }
 
+/// Renders the settings popup
+pub fn popup_settings(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let area = centered_rect_dialog(frame.area(), 55, 14);
+
+    let dialog_block = Block::default()
+        .title(" Settings ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(0)
+        .constraints([
+            Constraint::Length(1), // spacing
+            Constraint::Length(1), // Panel Layout
+            Constraint::Length(1), // spacing
+            Constraint::Length(1), // Show Hidden
+            Constraint::Length(1), // spacing
+            Constraint::Length(1), // Show Preview
+            Constraint::Length(1), // spacing
+            Constraint::Length(1), // Default Path
+            Constraint::Length(1), // spacing
+            Constraint::Min(1),   // hint
+        ])
+        .split(inner_area);
+
+    let state = context.settings_state.as_ref();
+    let focused = state.map(|s| s.focused_field).unwrap_or(0);
+    let editing_path = state.map(|s| s.editing_path).unwrap_or(false);
+
+    let field_style = |idx: usize| -> Style {
+        if idx == focused {
+            Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        }
+    };
+
+    // Field 0: Panel Layout
+    let layout_val = context.config.general.panel_layout.as_str();
+    let layout_line = Line::from(vec![
+        Span::styled("  Panel Layout   ", Style::default().fg(Color::Yellow)),
+        Span::styled(format!("◂ {:^12} ▸", layout_val), field_style(0)),
+    ]);
+    frame.render_widget(Paragraph::new(layout_line), chunks[1]);
+
+    // Field 1: Show Hidden
+    let hidden_val = if context.config.general.show_hidden { " On " } else { " Off" };
+    let hidden_line = Line::from(vec![
+        Span::styled("  Show Hidden    ", Style::default().fg(Color::Yellow)),
+        Span::styled(format!("  {:^12}  ", hidden_val), field_style(1)),
+    ]);
+    frame.render_widget(Paragraph::new(hidden_line), chunks[3]);
+
+    // Field 2: Show Preview
+    let preview_val = if context.config.general.show_preview_on_start { " On " } else { " Off" };
+    let preview_line = Line::from(vec![
+        Span::styled("  Show Preview   ", Style::default().fg(Color::Yellow)),
+        Span::styled(format!("  {:^12}  ", preview_val), field_style(2)),
+    ]);
+    frame.render_widget(Paragraph::new(preview_line), chunks[5]);
+
+    // Field 3: Default Path
+    let path_val = if editing_path {
+        state.map(|s| s.path_input.as_str()).unwrap_or("")
+    } else {
+        &context.config.general.default_path
+    };
+    let path_suffix = if editing_path && focused == 3 { "▎" } else { "" };
+    let path_line = Line::from(vec![
+        Span::styled("  Default Path   ", Style::default().fg(Color::Yellow)),
+        Span::styled(format!(" {}{} ", path_val, path_suffix), field_style(3)),
+    ]);
+    frame.render_widget(Paragraph::new(path_line), chunks[7]);
+
+    // Hint
+    let hint = if editing_path {
+        "Enter: confirm  Esc: cancel"
+    } else {
+        "↑↓: navigate  ◂▸/Space: change  Enter: edit path  Esc: save & close"
+    };
+    let hint_line = Paragraph::new(hint)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(hint_line, chunks[9]);
+
+    Ok(())
+}
+
 /// Renders the connection dialog popup
 pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
     let dialog = match context.connect_dialog.as_ref() {

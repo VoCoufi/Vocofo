@@ -292,6 +292,7 @@ fn handle_events(context: &mut Context, timeout: Duration) -> AppResult<bool> {
                     context::UiState::ConnectDialog => event_handler::handle_connect_dialog_event(context, key),
                     context::UiState::BookmarkList => event_handler::handle_bookmark_list_event(context, key),
                     context::UiState::BookmarkNameInput => event_handler::handle_bookmark_name_event(context, key),
+                    context::UiState::SettingsPopup => event_handler::handle_settings_event(context, key),
                 }?;
             }
         }
