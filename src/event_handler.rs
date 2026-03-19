@@ -59,7 +59,7 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
                 panel.decrease_state();
             }
         }
-        (KeyCode::Char('p'), _) => {
+        (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
             context.set_ui_state(UiState::CreatePopup);
         }
         (KeyCode::Char(' '), _) => {
@@ -83,10 +83,10 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
         (KeyCode::Char('x'), KeyModifiers::CONTROL) => {
             handle_copy_or_cut(context, crate::context::ClipboardMode::Cut);
         }
-        (KeyCode::Char('d'), _) => {
+        (KeyCode::Delete, _) => {
             context.set_ui_state(UiState::ConfirmDelete);
         }
-        (KeyCode::Char('r'), _) => {
+        (KeyCode::Char('r'), KeyModifiers::CONTROL) => {
             if let Some(item) = context.active().get_selected_item() {
                 if item != "../" {
                     let name = item.trim_end_matches('/').to_string();
@@ -214,7 +214,7 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
             context.pending_g = true;
         }
         // Create file
-        (KeyCode::Char('n'), _) => {
+        (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
             context.set_ui_state(UiState::CreateFilePopup);
         }
         _ => {}
