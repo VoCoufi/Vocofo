@@ -155,6 +155,7 @@ fn create_keyboard_shortcuts() -> String {
         ("Bksp", "Parent Dir"),
         (".", "Hidden"),
         ("F3", "Preview"),
+        ("F1", "Commands"),
         ("F2", "Settings"),
         ("^M", "chmod"),
         ("F5", "Connect"),
@@ -240,6 +241,7 @@ fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
         UiState::BookmarkList => render::popup_bookmark_list(frame, context)?,
         UiState::BookmarkNameInput => render::popup_bookmark_name(frame, context)?,
         UiState::SettingsPopup => render::popup_settings(frame, context)?,
+        UiState::CommandPalette => render::popup_command_palette(frame, context)?,
         UiState::SearchMode | UiState::Normal => ()
     }
 

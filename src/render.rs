@@ -493,6 +493,89 @@ pub fn popup_bookmark_name(frame: &mut Frame, context: &mut Context) -> RenderRe
     Ok(())
 }
 
+/// Renders the command palette popup
+pub fn popup_command_palette(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    use crate::event_handler::PALETTE_ACTIONS;
+
+    let state = match context.command_palette.as_ref() {
+        Some(s) => s,
+        None => return Ok(()),
+    };
+
+    let visible_count = state.filtered_indices.len().min(15);
+    let height = (visible_count as u16 + 5).max(6);
+    let area = centered_rect_dialog(frame.area(), 50, height);
+
+    let dialog_block = Block::default()
+        .title(" Command Palette ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // filter input
+            Constraint::Length(1), // separator
+            Constraint::Min(1),   // action list
+        ])
+        .split(inner_area);
+
+    // Filter input
+    let cursor = if state.filter.is_empty() { "▎" } else { "" };
+    let input_line = Line::from(vec![
+        Span::styled(" > ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{}{}", state.filter, cursor), Style::default().fg(Color::White)),
+    ]);
+    frame.render_widget(Paragraph::new(input_line), chunks[0]);
+
+    // Separator
+    let sep = Paragraph::new("─".repeat(chunks[1].width as usize))
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(sep, chunks[1]);
+
+    // Action list
+    let items: Vec<Line> = state.filtered_indices.iter()
+        .take(15)
+        .enumerate()
+        .map(|(i, &action_idx)| {
+            let action = &PALETTE_ACTIONS[action_idx];
+            let label_width = chunks[2].width.saturating_sub(10) as usize;
+            let padded_label = format!(" {:<width$}", action.label, width = label_width);
+            let style = if i == state.selected {
+                Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            let shortcut_style = if i == state.selected {
+                Style::default().bg(Color::Blue).fg(Color::Gray)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            Line::from(vec![
+                Span::styled(padded_label, style),
+                Span::styled(format!("{:>6} ", action.shortcut), shortcut_style),
+            ])
+        })
+        .collect();
+
+    if items.is_empty() {
+        let empty = Paragraph::new(" No matching actions")
+            .style(Style::default().fg(Color::DarkGray));
+        frame.render_widget(empty, chunks[2]);
+    } else {
+        frame.render_widget(Paragraph::new(items), chunks[2]);
+    }
+
+    Ok(())
+}
+
 /// Renders the settings popup
 pub fn popup_settings(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
     let area = centered_rect_dialog(frame.area(), 55, 14);

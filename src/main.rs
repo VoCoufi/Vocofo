@@ -293,6 +293,7 @@ fn handle_events(context: &mut Context, timeout: Duration) -> AppResult<bool> {
                     context::UiState::BookmarkList => event_handler::handle_bookmark_list_event(context, key),
                     context::UiState::BookmarkNameInput => event_handler::handle_bookmark_name_event(context, key),
                     context::UiState::SettingsPopup => event_handler::handle_settings_event(context, key),
+                    context::UiState::CommandPalette => event_handler::handle_command_palette_event(context, key),
                 }?;
             }
         }

@@ -251,6 +251,7 @@ pub enum UiState {
     BookmarkList,
     BookmarkNameInput,
     SettingsPopup,
+    CommandPalette,
 }
 
 /// State for the settings popup
@@ -272,6 +273,24 @@ impl SettingsState {
 
     pub fn field_count(&self) -> usize {
         4
+    }
+}
+
+/// State for the command palette
+#[derive(Debug, Clone)]
+pub struct CommandPaletteState {
+    pub filter: String,
+    pub selected: usize,
+    pub filtered_indices: Vec<usize>,
+}
+
+impl CommandPaletteState {
+    pub fn new(total_actions: usize) -> Self {
+        Self {
+            filter: String::new(),
+            selected: 0,
+            filtered_indices: (0..total_actions).collect(),
+        }
     }
 }
 
@@ -346,6 +365,7 @@ pub struct Context {
     pub bookmark_selected: usize,
     pub transfer_progress: Option<Arc<crate::background_op::TransferProgress>>,
     pub settings_state: Option<SettingsState>,
+    pub command_palette: Option<CommandPaletteState>,
 }
 
 impl Context {
@@ -386,6 +406,7 @@ impl Context {
             bookmark_selected: 0,
             transfer_progress: None,
             settings_state: None,
+            command_palette: None,
         })
     }
 
