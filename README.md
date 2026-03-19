@@ -2,33 +2,29 @@
 
 [![Crates.io](https://img.shields.io/crates/v/vocofo.svg)](https://crates.io/crates/vocofo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
 
-A fast, lightweight terminal-based file manager written in Rust. Navigate your filesystem efficiently with keyboard-driven controls and a clean, color-coded interface.
-
-## Demo
-
-<!-- TODO: Add screenshot or animated GIF showing Vocofo in action -->
-*Screenshots and demo GIF coming soon!*
+A fast, lightweight terminal-based file manager written in Rust with dual-panel layout, vim-style navigation, and remote filesystem support (SFTP/FTP/SCP).
 
 ## Features
 
-- **Lightning Fast**: Built with Rust for maximum performance and safety
-- **Keyboard-Driven**: Complete control without touching your mouse
-- **Intuitive Navigation**: Vim-like controls for familiar workflows
-- **File Operations**: Copy, paste, delete, and create with simple shortcuts
-- **Visual Feedback**: Color-coded files and folders, highlighted selection
-- **Confirmation Dialogs**: Safety checks before destructive operations
-- **Cross-Platform**: Works on Linux, macOS, and Windows
+- **Dual-Panel Layout**: Side-by-side or stacked panels (auto/horizontal/vertical)
+- **Vim-Style Navigation**: `j/k/h/l`, `g/G`, search with `/`
+- **File Operations**: Copy, cut, paste, delete, rename, chmod — all with Ctrl+ safety
+- **Remote Filesystems**: SFTP, FTP, and SCP fallback with connection bookmarks
+- **Command Palette**: `F1` opens searchable list of all available actions
+- **Settings UI**: `F2` for panel layout, hidden files, preview, default path
+- **File Preview**: `F3` toggle preview panel with file contents/directory listing
+- **Bulk Selection**: Space to select, `Ctrl+A` select all, batch operations
+- **Progress Tracking**: Transfer progress shown for cross-backend file copies
+- **Reconnect**: Automatic keep-alive and reconnection for remote connections
+- **Configurable**: Settings persisted to `~/.config/vocofo/config.toml`
 
 ## Quick Start
 
 ```bash
-# Clone the repository
+# Clone and run
 git clone https://gitlab.com/Coufik/Vocofo.git
 cd Vocofo
-
-# Build and run
 cargo run
 
 # Or install locally
@@ -40,155 +36,149 @@ vocofo
 
 ### Build from Source
 
-**Prerequisites:**
-- Rust 1.70+ (install from [rustup.rs](https://rustup.rs/))
+**Prerequisites:** Rust 1.70+ ([rustup.rs](https://rustup.rs/))
 
-**Steps:**
 ```bash
 git clone https://gitlab.com/Coufik/Vocofo.git
 cd Vocofo
 cargo build --release
+# Binary at target/release/vocofo
 ```
 
-The compiled binary will be in `target/release/vocofo`.
+### Feature Flags
 
-### Binary Releases
+SFTP and FTP are enabled by default. To build without remote support:
 
-Pre-built binaries for Linux, macOS, and Windows will be available in future releases. Watch this space!
+```bash
+cargo build --release --no-default-features
+```
 
 ## Keyboard Shortcuts
 
+### Navigation
+
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` | Move selection up/down |
-| `Enter` | Open selected folder or file |
-| `Tab` | Navigate to parent directory |
-| `P` | Create new folder (popup dialog) |
-| `D` | Delete selected file/folder (with confirmation) |
-| `Ctrl+C` | Copy selected file/folder to clipboard |
-| `Ctrl+V` | Paste from clipboard to current directory |
-| `Esc` / `Q` | Exit application |
+| `↑/↓` or `j/k` | Move selection |
+| `Enter` or `l` | Open file/folder |
+| `Backspace` or `h` | Parent directory |
+| `Tab` | Switch panel |
+| `g g` | Go to first item |
+| `G` | Go to last item |
+| `PageUp/PageDown` | Page scroll |
+| `/` | Search / filter |
+| `.` | Toggle hidden files |
+| `=` | Sync panels |
 
-## Usage
+### File Operations
 
-### Basic Navigation
+| Key | Action |
+|-----|--------|
+| `Ctrl+C` | Copy |
+| `Ctrl+X` | Cut |
+| `Ctrl+V` | Paste |
+| `Del` | Delete (with confirmation) |
+| `Ctrl+R` | Rename |
+| `Ctrl+N` | New file |
+| `Ctrl+P` | New folder |
+| `Ctrl+M` | chmod (change permissions) |
+| `Space` | Toggle selection |
+| `Ctrl+A` | Select all |
+| `Ctrl+D` | Deselect all |
 
-1. **Launch Vocofo** in your terminal
-2. Use `↑` and `↓` arrows to select files/folders
-3. Press `Enter` to open the selected folder
-4. Press `Tab` to go back to the parent directory
-5. Press `Q` or `Esc` to quit
+### Application
 
-### Creating Folders
+| Key | Action |
+|-----|--------|
+| `F1` | Command palette (all actions) |
+| `F2` | Settings |
+| `F3` | Toggle preview |
+| `F5` | Connect to remote server |
+| `F6` | Disconnect |
+| `F7` | Bookmarks |
+| `Q` / `Esc` | Quit |
 
-1. Press `P` to open the "Create Folder" dialog
-2. Type the folder name
-3. Press `Enter` to create, or `Esc` to cancel
+## Remote Connections
 
-### Copying and Pasting Files
+Vocofo supports browsing remote filesystems via SFTP, FTP, and SCP:
 
-1. Navigate to the file or folder you want to copy
-2. Press `Ctrl+C` to copy it to the clipboard
-3. Navigate to the destination folder
-4. Press `Ctrl+V` to paste
+1. Press `F5` to open the connection dialog
+2. Select protocol (SFTP/FTP), enter host, port, username, password
+3. Press `Enter` to connect — the active panel switches to the remote filesystem
+4. All file operations work across local and remote panels (cross-backend copy/move)
+5. Press `F6` to disconnect
 
-**Note:** If a file with the same name exists at the destination, the operation will fail (overwrite protection).
+### Bookmarks
 
-### Deleting Files
+- `Ctrl+S` in the connection dialog saves the current connection as a bookmark
+- `F7` opens the bookmark list to quickly reconnect (passwords are never saved)
 
-1. Navigate to the file or folder you want to delete
-2. Press `D` to open the confirmation dialog
-3. Press `Enter` to confirm deletion, or `Esc` to cancel
+### SCP Fallback
 
-## Architecture
+When an SSH server doesn't have the SFTP subsystem enabled, Vocofo automatically falls back to SCP mode using SSH exec commands for browsing and SCP for file transfers.
 
-Vocofo follows a clean, modular architecture with clear separation of concerns:
+## Configuration
 
-- **State Machine Pattern**: Different UI modes (Normal, CreatePopup, ConfirmDelete)
-- **Event-Driven**: Keyboard events routed to appropriate handlers
-- **Centralized State**: All application state managed through the `Context` struct
-- **Filesystem Isolation**: All file operations in dedicated module
+Settings are stored in `~/.config/vocofo/config.toml`:
+
+```toml
+[general]
+show_hidden = false
+default_path = "."
+show_preview_on_start = false
+panel_layout = "auto"  # "auto", "horizontal", or "vertical"
+
+[[connections]]
+name = "My Server"
+protocol = "sftp"
+host = "example.com"
+port = 22
+username = "user"
+```
 
 ## Testing
 
-Vocofo has a comprehensive test suite with **48 tests** covering:
-- File operations (create, delete, copy)
-- State management and navigation
-- Copy/paste workflows
-- Edge cases and error handling
+270 tests covering file operations, UI state, remote backends, and integration workflows:
 
 ```bash
-# Run all tests
-cargo test
+cargo test                              # Run all tests
+cargo test --test sftp_integration_test -- --ignored  # SFTP integration (needs local sshd)
+```
 
-# Run with output
-cargo test -- --nocapture
+## Architecture
 
-# Run specific test file
-cargo test --test file_operations_test
+```
+src/
+├── main.rs              # Entry point, terminal setup, main loop
+├── context.rs           # Central app state (Context, PanelState, UiState)
+├── backend.rs           # FilesystemBackend trait
+├── local_backend.rs     # Local filesystem implementation
+├── sftp_backend.rs      # SFTP via ssh2
+├── ftp_backend.rs       # FTP via suppaftp
+├── scp_backend.rs       # SCP fallback (SSH exec + SCP)
+├── config.rs            # Config loading/saving (TOML)
+├── file_operation.rs    # File ops, preview, paste resolution
+├── background_op.rs     # Background threads for copy/move/delete
+├── event_handler/       # Keyboard input handling (6 modules)
+├── render/              # UI rendering (panels + popups)
+├── ui.rs                # Layout, status bar, popup routing
+└── messages_enum.rs     # UI text constants
 ```
 
 ## Contributing
 
-Contributions are welcome! Here's how you can help:
-
-1. **Fork** the repository
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes** and add tests
-4. **Run the test suite**: `cargo test`
-5. **Commit your changes**: `git commit -m 'Add amazing feature'`
-6. **Push to the branch**: `git push origin feature/amazing-feature`
-7. **Open a Merge Request**
-
-### Development Guidelines
-
-- Follow Rust best practices and idioms
-- Add tests for new features
-- Use `PathBuf` for cross-platform path handling
-- Avoid `.unwrap()` and `.expect()` in user-facing code
-- Document public functions with doc comments
-
-### Code Style
-
-```bash
-# Format code
-cargo fmt
-
-# Run linter
-cargo clippy
-
-# Check for errors
-cargo check
-```
-
-## Roadmap
-
-Planned features and enhancements:
-
-- **Overwrite Confirmation**: Popup dialog when pasting over existing files
-- **Cut/Move Operations**: Ctrl+X for cut, move files between directories
-- **Visual Clipboard Indicator**: Show what's currently copied in status bar
-- **Progress Bars**: For large file/folder operations
-- **Search Functionality**: Quick file search within current directory
-- **Bookmarks**: Save and jump to frequently-used directories
-- **File Preview**: View file contents in a split pane
-- **Bulk Operations**: Select multiple files for batch operations
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make changes and add tests
+4. Run `cargo test && cargo clippy && cargo fmt --check`
+5. Commit and open a Merge Request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE) for details.
 
-## Acknowledgments
-
-Built with excellent open-source libraries:
-- [ratatui](https://github.com/ratatui-org/ratatui) - Terminal UI framework
-- [crossterm](https://github.com/crossterm-rs/crossterm) - Cross-platform terminal manipulation
-- [edit](https://crates.io/crates/edit) - Text editor integration
-
-Special thanks to the Rust community for their invaluable resources and support.
+Built with [ratatui](https://github.com/ratatui-org/ratatui), [crossterm](https://github.com/crossterm-rs/crossterm), [ssh2](https://crates.io/crates/ssh2), and [suppaftp](https://crates.io/crates/suppaftp).
 
 ---
 
-**Project Status**: Active development (v0.1.0)
-
-For questions, issues, or suggestions, please open an issue on [GitLab](https://gitlab.com/Coufik/Vocofo/-/issues).
+For issues and suggestions: [GitLab Issues](https://gitlab.com/Coufik/Vocofo/-/issues)
