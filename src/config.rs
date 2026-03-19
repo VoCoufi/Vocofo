@@ -1,14 +1,27 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct Config {
     pub general: GeneralConfig,
+    #[serde(default)]
+    pub connections: Vec<ConnectionProfile>,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct ConnectionProfile {
+    pub name: String,
+    pub protocol: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    #[serde(default)]
+    pub key_path: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct GeneralConfig {
     pub show_hidden: bool,
@@ -20,6 +33,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             general: GeneralConfig::default(),
+            connections: Vec::new(),
         }
     }
 }
@@ -43,6 +57,18 @@ impl Config {
             }
             Err(_) => Self::default(),
         }
+    }
+
+    pub fn save(&self) -> std::io::Result<()> {
+        let path = config_file_path();
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let tmp_path = path.with_extension("toml.tmp");
+        fs::write(&tmp_path, content)?;
+        fs::rename(&tmp_path, &path)
     }
 }
 

@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use crate::background_op;
-use crate::context::{Context, UiState};
+use crate::context::{ConnectDialogState, ConnectionProtocol, Context, UiState};
 use crate::file_operation;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -93,10 +95,32 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
                 }
             }
         }
+        (KeyCode::Char('m'), KeyModifiers::CONTROL) => {
+            if let Some(item) = context.active().get_selected_item() {
+                if item != "../" {
+                    let name = item.trim_end_matches('/').to_string();
+                    let path = context.active().backend.join_path(&context.active().path, &name);
+                    match context.active().backend.metadata(&path) {
+                        Ok(info) => {
+                            let current_mode = info.mode
+                                .map(|m| format!("{:o}", m & 0o7777))
+                                .unwrap_or_else(|| "644".to_string());
+                            context.set_input(current_mode);
+                            context.set_ui_state(UiState::ChmodPopup);
+                        }
+                        Err(e) => {
+                            context.set_status_message(&format!("Cannot read permissions: {}", e));
+                        }
+                    }
+                }
+            }
+        }
         (KeyCode::Char('='), _) => {
             let path = context.active().path.clone();
+            let backend = Arc::clone(&context.active().backend);
             let other = 1 - context.active_panel;
             context.panels[other].path = path;
+            context.panels[other].backend = backend;
             context.panels[other].invalidate_directory_cache();
             context.panels[other].clear_filter();
             context.set_status_message("Panels synced");
@@ -113,6 +137,31 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
         }
         (KeyCode::F(3), _) => {
             context.show_preview = !context.show_preview;
+        }
+        (KeyCode::F(5), _) => {
+            context.connect_dialog = Some(ConnectDialogState::new());
+            context.set_ui_state(UiState::ConnectDialog);
+        }
+        (KeyCode::F(6), _) => {
+            // Disconnect: explicitly close connection, then reset to local backend
+            if !context.active().backend.is_local() {
+                context.active().backend.disconnect();
+                let local_backend: Arc<dyn crate::backend::FilesystemBackend> =
+                    Arc::new(crate::local_backend::LocalBackend::new());
+                let home = local_backend.canonicalize(".").unwrap_or_else(|_| ".".to_string());
+                context.active_mut().backend = local_backend;
+                context.active_mut().path = home;
+                context.active_mut().invalidate_directory_cache();
+                context.set_status_message("Disconnected");
+            }
+        }
+        (KeyCode::F(7), _) => {
+            if context.config.connections.is_empty() {
+                context.set_status_message("No saved bookmarks");
+            } else {
+                context.bookmark_selected = 0;
+                context.set_ui_state(UiState::BookmarkList);
+            }
         }
         // Page navigation
         (KeyCode::PageDown, _) => {
@@ -320,6 +369,367 @@ pub fn handle_rename_popup_event(context: &mut Context, key_event: KeyEvent) -> 
     Ok(())
 }
 
+/// Handles key events for the chmod popup
+pub fn handle_chmod_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+    match key_event.code {
+        KeyCode::Backspace => {
+            if !context.input.is_empty() {
+                context.input.pop();
+            }
+        }
+        KeyCode::Enter => {
+            let input = context.input.clone();
+            let mode = u32::from_str_radix(&input, 8);
+            match mode {
+                Ok(m) if m <= 0o7777 => {
+                    if let Some(item) = context.active().get_selected_item() {
+                        let name = item.trim_end_matches('/').to_string();
+                        let path = context.active().backend.join_path(&context.active().path, &name);
+                        match context.active().backend.chmod(&path, m) {
+                            Ok(()) => {
+                                context.active_mut().invalidate_directory_cache();
+                                context.set_status_message(&format!("Permissions changed to {:o}", m));
+                            }
+                            Err(e) => {
+                                context.set_status_message(&format!("chmod failed: {}", e));
+                            }
+                        }
+                    }
+                    context.set_ui_state(UiState::Normal);
+                    context.set_input(String::default());
+                }
+                _ => {
+                    context.set_status_message("Invalid octal mode (use e.g. 755)");
+                    context.set_ui_state(UiState::Normal);
+                    context.set_input(String::default());
+                }
+            }
+        }
+        KeyCode::Esc => {
+            context.set_ui_state(UiState::Normal);
+            context.set_input(String::default());
+        }
+        KeyCode::Char(c) if c.is_ascii_digit() && c < '8' => {
+            if context.input.len() < 4 {
+                context.input.push(c);
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Handles key events for the connection dialog
+pub fn handle_connect_dialog_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+    let dialog = match context.connect_dialog.as_mut() {
+        Some(d) => d,
+        None => {
+            context.set_ui_state(UiState::Normal);
+            return Ok(());
+        }
+    };
+
+    match key_event.code {
+        KeyCode::Esc => {
+            context.connect_dialog = None;
+            context.set_ui_state(UiState::Normal);
+        }
+        KeyCode::Tab => {
+            dialog.focused_field = (dialog.focused_field + 1) % dialog.field_count();
+        }
+        KeyCode::BackTab => {
+            if dialog.focused_field == 0 {
+                dialog.focused_field = dialog.field_count() - 1;
+            } else {
+                dialog.focused_field -= 1;
+            }
+        }
+        KeyCode::Up if dialog.focused_field == 0 => {
+            // Toggle protocol
+            dialog.protocol = match dialog.protocol {
+                ConnectionProtocol::Sftp => ConnectionProtocol::Ftp,
+                ConnectionProtocol::Ftp => ConnectionProtocol::Sftp,
+            };
+            // Update default port
+            dialog.port = match dialog.protocol {
+                ConnectionProtocol::Sftp => "22".to_string(),
+                ConnectionProtocol::Ftp => "21".to_string(),
+            };
+        }
+        KeyCode::Down if dialog.focused_field == 0 => {
+            dialog.protocol = match dialog.protocol {
+                ConnectionProtocol::Sftp => ConnectionProtocol::Ftp,
+                ConnectionProtocol::Ftp => ConnectionProtocol::Sftp,
+            };
+            dialog.port = match dialog.protocol {
+                ConnectionProtocol::Sftp => "22".to_string(),
+                ConnectionProtocol::Ftp => "21".to_string(),
+            };
+        }
+        KeyCode::Backspace if dialog.focused_field > 0 => {
+            dialog.active_field_mut().pop();
+        }
+        KeyCode::Char('s') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Save as bookmark — switch to name input
+            if dialog.host.is_empty() {
+                dialog.error_message = Some("Host is required to save bookmark".to_string());
+            } else {
+                let default_name = format!("{}@{}", dialog.username, dialog.host);
+                context.input = default_name;
+                context.set_ui_state(UiState::BookmarkNameInput);
+            }
+        }
+        KeyCode::Char(c) if dialog.focused_field > 0 => {
+            dialog.active_field_mut().push(c);
+        }
+        KeyCode::Enter => {
+            attempt_connection(context);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Handles key events for the bookmark list popup
+pub fn handle_bookmark_list_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+    let count = context.config.connections.len();
+    match key_event.code {
+        KeyCode::Esc => {
+            context.set_ui_state(UiState::Normal);
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            if context.bookmark_selected > 0 {
+                context.bookmark_selected -= 1;
+            }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if context.bookmark_selected + 1 < count {
+                context.bookmark_selected += 1;
+            }
+        }
+        KeyCode::Char('d') => {
+            if context.bookmark_selected < count {
+                context.config.connections.remove(context.bookmark_selected);
+                if context.bookmark_selected >= context.config.connections.len() && context.bookmark_selected > 0 {
+                    context.bookmark_selected -= 1;
+                }
+                let _ = context.config.save();
+                if context.config.connections.is_empty() {
+                    context.set_ui_state(UiState::Normal);
+                    context.set_status_message("Bookmark deleted");
+                }
+            }
+        }
+        KeyCode::Enter => {
+            if context.bookmark_selected < count {
+                let profile = &context.config.connections[context.bookmark_selected];
+                let mut dialog = ConnectDialogState::new();
+                dialog.protocol = match profile.protocol.as_str() {
+                    "ftp" => ConnectionProtocol::Ftp,
+                    _ => ConnectionProtocol::Sftp,
+                };
+                dialog.host = profile.host.clone();
+                dialog.port = profile.port.to_string();
+                dialog.username = profile.username.clone();
+                dialog.key_path = profile.key_path.clone().unwrap_or_default();
+                // password intentionally left empty
+                context.connect_dialog = Some(dialog);
+                context.set_ui_state(UiState::ConnectDialog);
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Handles key events for the bookmark name input popup
+pub fn handle_bookmark_name_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+    match key_event.code {
+        KeyCode::Esc => {
+            context.set_input(String::default());
+            context.set_ui_state(UiState::ConnectDialog);
+        }
+        KeyCode::Backspace => {
+            context.input.pop();
+        }
+        KeyCode::Enter => {
+            let name = context.input.clone();
+            if name.is_empty() {
+                context.set_ui_state(UiState::ConnectDialog);
+                return Ok(());
+            }
+            if let Some(dialog) = &context.connect_dialog {
+                let protocol = match dialog.protocol {
+                    ConnectionProtocol::Sftp => "sftp",
+                    ConnectionProtocol::Ftp => "ftp",
+                };
+                let port: u16 = dialog.port.parse().unwrap_or(match dialog.protocol {
+                    ConnectionProtocol::Sftp => 22,
+                    ConnectionProtocol::Ftp => 21,
+                });
+                let key_path = if dialog.key_path.is_empty() {
+                    None
+                } else {
+                    Some(dialog.key_path.clone())
+                };
+                let profile = crate::config::ConnectionProfile {
+                    name: name.clone(),
+                    protocol: protocol.to_string(),
+                    host: dialog.host.clone(),
+                    port,
+                    username: dialog.username.clone(),
+                    key_path,
+                };
+                context.config.connections.push(profile);
+                let _ = context.config.save();
+                context.set_status_message(&format!("Bookmark '{}' saved", name));
+            }
+            context.set_input(String::default());
+            context.set_ui_state(UiState::ConnectDialog);
+        }
+        KeyCode::Char(c) => {
+            context.input.push(c);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn attempt_connection(context: &mut Context) {
+    let dialog = match context.connect_dialog.as_ref() {
+        Some(d) => d.clone(),
+        None => return,
+    };
+
+    if dialog.host.is_empty() {
+        if let Some(d) = context.connect_dialog.as_mut() {
+            d.error_message = Some("Host is required".to_string());
+        }
+        return;
+    }
+
+    let port: u16 = match dialog.port.parse::<u16>() {
+        Ok(0) | Err(_) => {
+            if let Some(d) = context.connect_dialog.as_mut() {
+                d.error_message = Some("Invalid port number".to_string());
+            }
+            return;
+        }
+        Ok(p) => p,
+    };
+
+    let result: Result<Arc<dyn crate::backend::FilesystemBackend>, String> = match dialog.protocol {
+        ConnectionProtocol::Sftp => {
+            #[cfg(feature = "sftp")]
+            {
+                let key = if dialog.key_path.is_empty() { None } else { Some(dialog.key_path.as_str()) };
+                match crate::sftp_backend::SftpBackend::connect(
+                    &dialog.host, port, &dialog.username, &dialog.password, key,
+                ) {
+                    Ok(b) => Ok(Arc::new(b) as Arc<dyn crate::backend::FilesystemBackend>),
+                    Err(sftp_err) => {
+                        // SFTP failed — try SCP fallback
+                        match connect_scp_fallback(&dialog.host, port, &dialog.username, &dialog.password, key) {
+                            Ok(b) => Ok(b),
+                            Err(_) => Err(sftp_err.to_string()), // report original SFTP error
+                        }
+                    }
+                }
+            }
+            #[cfg(not(feature = "sftp"))]
+            {
+                Err("SFTP support not compiled (enable 'sftp' feature)".to_string())
+            }
+        }
+        ConnectionProtocol::Ftp => {
+            #[cfg(feature = "ftp")]
+            {
+                crate::ftp_backend::FtpBackend::connect(
+                    &dialog.host,
+                    port,
+                    &dialog.username,
+                    &dialog.password,
+                )
+                .map(|b| Arc::new(b) as Arc<dyn crate::backend::FilesystemBackend>)
+                .map_err(|e| e.to_string())
+            }
+            #[cfg(not(feature = "ftp"))]
+            {
+                Err("FTP support not compiled (enable 'ftp' feature)".to_string())
+            }
+        }
+    };
+
+    match result {
+        Ok(backend) => {
+            let initial_path = backend.canonicalize(".")
+                .unwrap_or_else(|_| "/".to_string());
+            let is_scp = backend.display_name().starts_with("SCP");
+            context.active_mut().backend = backend;
+            context.active_mut().path = initial_path;
+            context.active_mut().invalidate_directory_cache();
+            context.connect_dialog = None;
+            context.set_ui_state(UiState::Normal);
+            let mode = if is_scp { "Connected (SCP mode)" } else { "Connected" };
+            context.set_status_message(mode);
+        }
+        Err(e) => {
+            if let Some(d) = context.connect_dialog.as_mut() {
+                d.error_message = Some(e);
+            }
+        }
+    }
+}
+
+/// Try to connect via SCP fallback (SSH exec + SCP transfers)
+#[cfg(feature = "sftp")]
+fn connect_scp_fallback(
+    host: &str,
+    port: u16,
+    username: &str,
+    password: &str,
+    key_path: Option<&str>,
+) -> Result<Arc<dyn crate::backend::FilesystemBackend>, String> {
+    use std::net::TcpStream;
+    use ssh2::Session;
+
+    let tcp = TcpStream::connect((host, port))
+        .map_err(|e| e.to_string())?;
+    let mut session = Session::new()
+        .map_err(|e| e.to_string())?;
+    session.set_tcp_stream(tcp);
+    session.handshake()
+        .map_err(|e| e.to_string())?;
+    session.set_timeout(30_000);
+
+    // Try auth methods in order: key, password, ssh-agent
+    if let Some(key) = key_path {
+        let passphrase = if password.is_empty() { None } else { Some(password) };
+        let _ = session.userauth_pubkey_file(username, None, std::path::Path::new(key), passphrase);
+    }
+    if !session.authenticated() && !password.is_empty() {
+        let _ = session.userauth_password(username, password);
+    }
+    if !session.authenticated() {
+        let _ = session.userauth_agent(username);
+    }
+    if !session.authenticated() {
+        return Err("Authentication failed".to_string());
+    }
+
+    let params = crate::backend::ConnectionParams {
+        protocol: ConnectionProtocol::Sftp,
+        host: host.to_string(),
+        port,
+        username: username.to_string(),
+        password: password.to_string(),
+        key_path: key_path.map(|s| s.to_string()),
+    };
+
+    Ok(Arc::new(crate::scp_backend::ScpBackend::from_session(session, params))
+        as Arc<dyn crate::backend::FilesystemBackend>)
+}
+
 /// Handles user input events for the delete confirmation popup
 pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
     match key_event.code {
@@ -393,6 +803,9 @@ pub fn handle_overwrite_popup_event(context: &mut Context, key_event: KeyEvent) 
 fn handle_copy_or_cut(context: &mut Context, mode: crate::context::ClipboardMode) {
     let label = if mode == crate::context::ClipboardMode::Cut { "Cut" } else { "Copied" };
 
+    // Store the source backend for cross-backend transfers
+    context.copy_source_backend = Some(Arc::clone(&context.active().backend));
+
     if context.active().has_selection() {
         context.copy_paths = context.active().get_selected_paths();
         context.copy_path = String::default();
@@ -413,6 +826,9 @@ fn handle_paste(context: &mut Context) {
     }
 
     let is_cut = context.clipboard_mode == crate::context::ClipboardMode::Cut;
+    let src_backend = context.copy_source_backend.clone()
+        .unwrap_or_else(|| Arc::clone(&context.active().backend));
+    let dst_backend = Arc::clone(&context.active().backend);
 
     // Multi-file paste
     if !context.copy_paths.is_empty() {
@@ -420,17 +836,21 @@ fn handle_paste(context: &mut Context) {
             Some(d) => d,
             None => return,
         };
-        let items: Vec<(std::path::PathBuf, std::path::PathBuf)> = context.copy_paths.iter()
+        let items: Vec<(String, String)> = context.copy_paths.iter()
             .map(|from| {
-                let name = from.file_name().unwrap_or_default();
-                let to = dest_dir.join(name);
+                let name = src_backend.file_name(from).unwrap_or_default();
+                let to = dst_backend.join_path(&dest_dir, &name);
                 (from.clone(), to)
             })
             .collect();
         let count = items.len();
         let action = if is_cut { "Moving" } else { "Copying" };
         let desc = format!("{} {} items...", action, count);
-        let rx = background_op::spawn_copy_batch(items, desc.clone(), is_cut);
+        let progress = Arc::new(crate::background_op::TransferProgress::new());
+        context.transfer_progress = Some(Arc::clone(&progress));
+        let rx = background_op::spawn_copy_batch_with_backend(
+            src_backend, dst_backend, items, desc.clone(), is_cut, Some(progress),
+        );
         context.start_operation(rx, desc);
         return;
     }
@@ -442,7 +862,7 @@ fn handle_paste(context: &mut Context) {
     }
     match file_operation::resolve_paste_paths(context) {
         Ok((from, to)) => {
-            if to.exists() {
+            if context.active().backend.exists(&to).unwrap_or(false) {
                 context.pending_paste = Some((from, to, is_cut));
                 context.confirm_popup_size = true;
                 context.set_ui_state(UiState::ConfirmOverwrite);
@@ -456,14 +876,16 @@ fn handle_paste(context: &mut Context) {
     }
 }
 
-fn resolve_paste_dest_dir(context: &mut Context) -> Option<std::path::PathBuf> {
+fn resolve_paste_dest_dir(context: &mut Context) -> Option<String> {
     let panel = context.active();
-    let base = std::path::PathBuf::from(&panel.path);
+    let base = panel.path.clone();
     if let Some(item) = panel.get_selected_item() {
         if panel.get_state() != 0 {
-            let full = base.join(item.trim_end_matches('/'));
-            if full.is_dir() {
-                return Some(full);
+            let full = panel.backend.join_path(&base, item.trim_end_matches('/'));
+            if let Ok(info) = panel.backend.metadata(&full) {
+                if info.is_dir {
+                    return Some(full);
+                }
             }
         }
     }
@@ -472,8 +894,9 @@ fn resolve_paste_dest_dir(context: &mut Context) -> Option<std::path::PathBuf> {
 
 fn execute_pending_paste(context: &mut Context) {
     if let Some((from, to, is_cut)) = context.pending_paste.take() {
-        if to.exists() {
-            if let Err(e) = file_operation::delete(&to) {
+        // Delete existing target before pasting
+        if context.active().backend.exists(&to).unwrap_or(false) {
+            if let Err(e) = file_operation::delete_with_backend(&context.active().backend, &to) {
                 context.set_status_message(&format!("Cannot remove existing file: {}", e));
                 return;
             }
@@ -484,21 +907,30 @@ fn execute_pending_paste(context: &mut Context) {
 
 fn spawn_paste_operation(
     context: &mut Context,
-    from: std::path::PathBuf,
-    to: std::path::PathBuf,
+    from: String,
+    to: String,
     is_cut: bool,
 ) {
-    let name = from.file_name()
-        .map(|n| n.to_string_lossy().to_string())
+    let src_backend = context.copy_source_backend.clone()
+        .unwrap_or_else(|| Arc::clone(&context.active().backend));
+    let dst_backend = Arc::clone(&context.active().backend);
+
+    let name = src_backend.file_name(&from)
         .unwrap_or_else(|| "item".to_string());
 
+    let progress = Arc::new(crate::background_op::TransferProgress::new());
+    context.transfer_progress = Some(Arc::clone(&progress));
     let (desc, rx) = if is_cut {
         let desc = format!("Moving {}...", name);
-        let rx = background_op::spawn_move(from, to, desc.clone());
+        let rx = background_op::spawn_move_with_backend(
+            src_backend, dst_backend, from, to, desc.clone(), Some(progress),
+        );
         (desc, rx)
     } else {
         let desc = format!("Copying {}...", name);
-        let rx = background_op::spawn_copy(from, to, desc.clone());
+        let rx = background_op::spawn_copy_with_backend(
+            src_backend, dst_backend, from, to, desc.clone(), Some(progress),
+        );
         (desc, rx)
     };
     context.start_operation(rx, desc);
@@ -511,13 +943,14 @@ fn spawn_delete_operation(context: &mut Context) {
     }
 
     let panel = context.active();
+    let backend = Arc::clone(&panel.backend);
 
     // Batch delete if selection exists
     if panel.has_selection() {
         let paths = panel.get_selected_paths();
         let count = paths.len();
         let desc = format!("Deleting {} items...", count);
-        let rx = background_op::spawn_delete_batch(paths, desc.clone());
+        let rx = background_op::spawn_delete_batch_with_backend(backend, paths, desc.clone());
         context.start_operation(rx, desc);
         context.active_mut().clear_selection();
         return;
@@ -528,8 +961,8 @@ fn spawn_delete_operation(context: &mut Context) {
         None => return,
     };
 
-    let path = std::path::PathBuf::from(&panel.path).join(&selected);
+    let path = panel.backend.join_path(&panel.path, &selected);
     let desc = format!("Deleting {}...", selected);
-    let rx = background_op::spawn_delete(path, desc.clone());
+    let rx = background_op::spawn_delete_with_backend(backend, path, desc.clone());
     context.start_operation(rx, desc);
 }

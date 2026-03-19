@@ -26,8 +26,11 @@ pub fn render_panel(frame: &mut Frame, area: Rect, panel: &mut PanelState, is_ac
             return ListItem::new(name.clone()).style(Style::new().blue());
         }
 
-        let full_path = std::path::PathBuf::from(&panel.path).join(name.trim_end_matches('/'));
-        let details = file_operation::format_item_details(&full_path);
+        let full_path = panel.backend.join_path(&panel.path, name.trim_end_matches('/'));
+        let details = match panel.backend.metadata(&full_path) {
+            Ok(info) => file_operation::format_item_details_from_info(&info),
+            Err(_) => String::new(),
+        };
 
         let is_selected = panel.selected.contains(name);
         let name_style = if is_selected {
@@ -289,11 +292,62 @@ pub fn popup_rename(frame: &mut Frame, context: &mut Context) -> RenderResult<()
     Ok(())
 }
 
+/// Renders the chmod popup
+pub fn popup_chmod(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let area = centered_rect_dialog(frame.area(), 50, 8);
+
+    let dialog_block = Block::default()
+        .title(" chmod ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(0)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ])
+        .split(inner_area);
+
+    let label = Paragraph::new("Enter octal mode (e.g. 755):")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+
+    let empty = String::new();
+    let input_text = context.get_input().unwrap_or(&empty);
+    let para = Paragraph::new(input_text.clone())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Black))
+                .padding(Padding::new(1, 1, 0, 0))
+        )
+        .alignment(Alignment::Left)
+        .style(Style::default().bg(Color::Blue).fg(Color::Black));
+
+    frame.render_widget(label, chunks[1]);
+    frame.render_widget(para, chunks[3]);
+
+    Ok(())
+}
+
 /// Renders an overwrite confirmation popup
 pub fn popup_confirm_overwrite(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
     let file_name = context.pending_paste.as_ref()
-        .and_then(|(_, to, _)| to.file_name())
-        .map(|n| n.to_string_lossy().to_string())
+        .and_then(|(_, to, _)| {
+            std::path::Path::new(to).file_name()
+                .map(|n| n.to_string_lossy().to_string())
+        })
         .unwrap_or_else(|| "file".to_string());
 
     let area = centered_rect_dialog(frame.area(), 80, 10);
@@ -349,6 +403,200 @@ pub fn popup_confirm_overwrite(frame: &mut Frame, context: &mut Context) -> Rend
     frame.render_widget(message, chunks[2]);
     frame.render_widget(yes_button, button_chunks[1]);
     frame.render_widget(no_button, button_chunks[3]);
+
+    Ok(())
+}
+
+/// Renders the bookmark list popup
+pub fn popup_bookmark_list(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let connections = &context.config.connections;
+    let height = (connections.len() as u16 + 4).min(20);
+    let area = centered_rect_dialog(frame.area(), 60, height);
+
+    let dialog_block = Block::default()
+        .title(" Bookmarks ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let items: Vec<Line> = connections.iter().enumerate().map(|(i, profile)| {
+        let text = format!(
+            " {} ({}://{}@{}:{}) ",
+            profile.name, profile.protocol, profile.username, profile.host, profile.port
+        );
+        let style = if i == context.bookmark_selected {
+            Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        Line::from(text).style(style)
+    }).collect();
+
+    let list = Paragraph::new(items);
+    frame.render_widget(list, inner_area);
+
+    Ok(())
+}
+
+/// Renders the bookmark name input popup
+pub fn popup_bookmark_name(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let area = centered_rect_dialog(frame.area(), 50, 8);
+
+    let dialog_block = Block::default()
+        .title(" Save Bookmark ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner_area = dialog_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(0)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ])
+        .split(inner_area);
+
+    let label = Paragraph::new("Bookmark name:")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+
+    let empty = String::new();
+    let input_text = context.get_input().unwrap_or(&empty);
+    let para = Paragraph::new(input_text.clone())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Black))
+                .padding(Padding::new(1, 1, 0, 0))
+        )
+        .alignment(Alignment::Left)
+        .style(Style::default().bg(Color::Blue).fg(Color::Black));
+
+    frame.render_widget(label, chunks[1]);
+    frame.render_widget(para, chunks[3]);
+
+    Ok(())
+}
+
+/// Renders the connection dialog popup
+pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let dialog = match context.connect_dialog.as_ref() {
+        Some(d) => d,
+        None => return Ok(()),
+    };
+
+    let r = frame.area();
+    let width = (r.width * 70 / 100).clamp(40, 70);
+    let height = 22_u16.min(r.height.saturating_sub(2));
+    let x = (r.width.saturating_sub(width)) / 2;
+    let y = (r.height.saturating_sub(height)) / 2;
+    let area = Rect::new(r.x + x, r.y + y, width, height);
+
+    let dialog_block = Block::default()
+        .title(" Connect to Remote Server ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(dialog_block.clone(), area);
+
+    let inner = dialog_block.inner(area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // 0: Protocol
+            Constraint::Length(1), // 1: spacing
+            Constraint::Length(3), // 2: Host
+            Constraint::Length(3), // 3: Port
+            Constraint::Length(3), // 4: Username
+            Constraint::Length(3), // 5: Password
+            Constraint::Length(3), // 6: Key path
+            Constraint::Min(1),   // 7: Error / hint (flexible)
+        ])
+        .split(inner);
+
+    let focused = dialog.focused_field;
+
+    // Protocol selector
+    let proto_text = match dialog.protocol {
+        crate::context::ConnectionProtocol::Sftp => "< SFTP >",
+        crate::context::ConnectionProtocol::Ftp => "< FTP  >",
+    };
+    let proto_style = if focused == 0 {
+        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+    let proto = Paragraph::new(format!("  Protocol: {}", proto_text)).style(proto_style);
+    frame.render_widget(proto, chunks[0]);
+
+    // Render fields
+    let fields = [
+        ("Host", &dialog.host, false),
+        ("Port", &dialog.port, false),
+        ("Username", &dialog.username, false),
+        ("Password", &dialog.password, true),
+        ("SSH Key", &dialog.key_path, false),
+    ];
+
+    for (i, (label, value, is_password)) in fields.iter().enumerate() {
+        let field_idx = i + 1;
+        let is_focused = focused == field_idx;
+        let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
+
+        let display_value = if *is_password && !value.is_empty() {
+            "*".repeat(value.len())
+        } else {
+            (*value).clone()
+        };
+
+        let cursor_suffix = if is_focused { "▎" } else { "" };
+
+        let para = Paragraph::new(format!("{}{}", display_value, cursor_suffix))
+            .block(
+                Block::default()
+                    .title(format!(" {} ", label))
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color))
+            )
+            .style(if is_focused {
+                Style::default().fg(Color::White)
+            } else {
+                Style::default().fg(Color::Gray)
+            });
+
+        frame.render_widget(para, chunks[i + 2]);
+    }
+
+    // Error message or hint
+    if let Some(ref err) = dialog.error_message {
+        let err_para = Paragraph::new(format!("  {}", err))
+            .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+            .wrap(Wrap { trim: false });
+        frame.render_widget(err_para, chunks[7]);
+    } else {
+        let hint = Paragraph::new("  [Tab] Next  [↑↓] Protocol  [Enter] Connect  [Esc] Cancel")
+            .style(Style::default().fg(Color::DarkGray));
+        frame.render_widget(hint, chunks[7]);
+    }
 
     Ok(())
 }

@@ -1,15 +1,17 @@
+use crate::backend::{FileInfo, FilesystemBackend};
 use crate::background_op::FileOpResult;
 use crate::config::Config;
 use crate::file_operation;
+use crate::local_backend::LocalBackend;
 use std::collections::HashSet;
-use std::fs;
-use std::fs::Metadata;
-use std::path::PathBuf;
 use std::sync::mpsc;
+use std::sync::Arc;
+use std::time::Instant;
 
 /// State for a single directory panel
 pub struct PanelState {
     pub path: String,
+    pub backend: Arc<dyn FilesystemBackend>,
     pub items: Vec<String>,
     pub filtered_items: Vec<String>,
     pub filter: String,
@@ -23,9 +25,10 @@ pub struct PanelState {
 }
 
 impl PanelState {
-    pub fn new(path: String) -> Self {
+    pub fn new(path: String, backend: Arc<dyn FilesystemBackend>) -> Self {
         Self {
             path,
+            backend,
             items: Vec::new(),
             filtered_items: Vec::new(),
             filter: String::new(),
@@ -70,9 +73,10 @@ impl PanelState {
         self.filtered_items.get(self.state)
     }
 
-    pub fn get_metadata_selected_item(&self) -> Option<Metadata> {
-        let path = PathBuf::from(self.path.clone()).join(self.get_selected_item()?);
-        fs::metadata(path).ok()
+    pub fn get_metadata_selected_item(&self) -> Option<FileInfo> {
+        let item = self.get_selected_item()?;
+        let full_path = self.backend.join_path(&self.path, item.trim_end_matches('/'));
+        self.backend.metadata(&full_path).ok()
     }
 
     pub fn apply_filter(&mut self) {
@@ -98,12 +102,12 @@ impl PanelState {
 
     pub fn set_full_path(&mut self) -> Option<String> {
         let get_item = match self.get_selected_item() {
-            Some(item) => item,
+            Some(item) => item.clone(),
             None => return None,
         };
 
-        let new_directory = PathBuf::from(self.path.clone()).join(get_item);
-        match file_operation::directory_path(&new_directory) {
+        let new_directory = self.backend.join_path(&self.path, &get_item);
+        match self.backend.canonicalize(&new_directory) {
             Ok(path) => {
                 self.path = path;
                 None
@@ -114,8 +118,8 @@ impl PanelState {
 
     /// Navigate to the parent directory regardless of current selection
     pub fn navigate_to_parent(&mut self) -> Option<String> {
-        let new_directory = PathBuf::from(self.path.clone()).join("../");
-        match file_operation::directory_path(&new_directory) {
+        let parent = self.backend.join_path(&self.path, "../");
+        match self.backend.canonicalize(&parent) {
             Ok(path) => {
                 self.path = path;
                 self.state = 0;
@@ -127,24 +131,24 @@ impl PanelState {
     }
 
     pub fn open_item(&mut self) -> Option<String> {
-        let file = match self.get_metadata_selected_item() {
-            Some(file) => file,
+        let info = match self.get_metadata_selected_item() {
+            Some(info) => info,
             None => return None,
         };
 
-        if file.is_dir() {
+        if info.is_dir {
             let err = self.set_full_path();
             self.state = 0;
             return err;
-        } else if file.is_file() {
+        } else if info.is_file {
             let selected_item = match self.get_selected_item() {
-                Some(item) => item,
+                Some(item) => item.clone(),
                 None => return None,
             };
 
-            let file_to_open = PathBuf::from(self.path.clone()).join(selected_item);
+            let file_to_open = self.backend.join_path(&self.path, &selected_item);
 
-            if let Err(err) = file_operation::open_file(&file_to_open) {
+            if let Err(err) = file_operation::open_file_with_backend(&self.backend, &file_to_open) {
                 return Some(format!("Cannot open file: {}", err));
             }
         }
@@ -168,12 +172,12 @@ impl PanelState {
         }
 
         let full_path = if selected_item == "../" {
-            PathBuf::from(&self.path)
+            self.path.clone()
         } else {
-            PathBuf::from(&self.path).join(&selected_item)
+            self.backend.join_path(&self.path, &selected_item)
         };
 
-        let preview = file_operation::generate_preview(&full_path);
+        let preview = file_operation::generate_preview_with_backend(&self.backend, &full_path);
         self.preview_content = Some(preview);
         self.preview_last_item = Some(selected_item);
     }
@@ -218,9 +222,9 @@ impl PanelState {
         !self.selected.is_empty()
     }
 
-    pub fn get_selected_paths(&self) -> Vec<PathBuf> {
+    pub fn get_selected_paths(&self) -> Vec<String> {
         self.selected.iter()
-            .map(|name| PathBuf::from(&self.path).join(name.trim_end_matches('/')))
+            .map(|name| self.backend.join_path(&self.path, name.trim_end_matches('/')))
             .collect()
     }
 }
@@ -242,6 +246,56 @@ pub enum UiState {
     RenamePopup,
     SearchMode,
     ConfirmOverwrite,
+    ConnectDialog,
+    ChmodPopup,
+    BookmarkList,
+    BookmarkNameInput,
+}
+
+// ConnectionProtocol and ConnectionParams are defined in backend.rs
+pub use crate::backend::{ConnectionParams, ConnectionProtocol};
+
+/// State for the connection dialog
+#[derive(Debug, Clone)]
+pub struct ConnectDialogState {
+    pub protocol: ConnectionProtocol,
+    pub host: String,
+    pub port: String,
+    pub username: String,
+    pub password: String,
+    pub key_path: String,
+    pub focused_field: usize,
+    pub error_message: Option<String>,
+}
+
+impl ConnectDialogState {
+    pub fn new() -> Self {
+        Self {
+            protocol: ConnectionProtocol::Sftp,
+            host: String::new(),
+            port: "22".to_string(),
+            username: String::new(),
+            password: String::new(),
+            key_path: String::new(),
+            focused_field: 1, // start on host field
+            error_message: None,
+        }
+    }
+
+    pub fn field_count(&self) -> usize {
+        6 // protocol, host, port, username, password, key_path
+    }
+
+    pub fn active_field_mut(&mut self) -> &mut String {
+        match self.focused_field {
+            1 => &mut self.host,
+            2 => &mut self.port,
+            3 => &mut self.username,
+            4 => &mut self.password,
+            5 => &mut self.key_path,
+            _ => &mut self.host,
+        }
+    }
 }
 
 /// Central application state
@@ -254,14 +308,20 @@ pub struct Context {
     pub confirm_popup_size: bool,
     pub input: String,
     pub copy_path: String,
-    pub copy_paths: Vec<PathBuf>,
+    pub copy_paths: Vec<String>,
     pub clipboard_mode: ClipboardMode,
-    pub pending_paste: Option<(PathBuf, PathBuf, bool)>,
+    pub copy_source_backend: Option<Arc<dyn FilesystemBackend>>,
+    pub pending_paste: Option<(String, String, bool)>,
     pub status_message: Option<String>,
     pub active_operation: Option<mpsc::Receiver<FileOpResult>>,
     pub operation_description: Option<String>,
     pub spinner_tick: u8,
     pub pending_g: bool,
+    pub connect_dialog: Option<ConnectDialogState>,
+    pub config: Config,
+    pub last_keepalive: Instant,
+    pub bookmark_selected: usize,
+    pub transfer_progress: Option<Arc<crate::background_op::TransferProgress>>,
 }
 
 impl Context {
@@ -270,10 +330,12 @@ impl Context {
     }
 
     pub fn with_config(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
-        let initial_path = file_operation::directory_path(&config.general.default_path)?;
+        let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
+        let initial_path = backend.canonicalize(&config.general.default_path)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let show_hidden = config.general.show_hidden;
-        let mut panel0 = PanelState::new(initial_path.clone());
-        let mut panel1 = PanelState::new(initial_path);
+        let mut panel0 = PanelState::new(initial_path.clone(), Arc::clone(&backend));
+        let mut panel1 = PanelState::new(initial_path, Arc::clone(&backend));
         panel0.show_hidden = show_hidden;
         panel1.show_hidden = show_hidden;
         Ok(Self {
@@ -287,12 +349,18 @@ impl Context {
             copy_path: String::default(),
             copy_paths: Vec::new(),
             clipboard_mode: ClipboardMode::Copy,
+            copy_source_backend: None,
             pending_paste: None,
             status_message: None,
             active_operation: None,
             operation_description: None,
             spinner_tick: 0,
             pending_g: false,
+            connect_dialog: None,
+            config,
+            last_keepalive: Instant::now(),
+            bookmark_selected: 0,
+            transfer_progress: None,
         })
     }
 
@@ -364,8 +432,7 @@ impl Context {
         }
 
         let clean_item = item.trim_end_matches("/");
-        let path = PathBuf::from(&self.active().path);
-        self.copy_path = path.join(clean_item).to_string_lossy().to_string();
+        self.copy_path = self.active().backend.join_path(&self.active().path, clean_item);
     }
 
     pub fn set_status_message(&mut self, message: &str) {

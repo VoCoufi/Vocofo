@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use vocofo::background_op;
 use vocofo::context::Context;
@@ -37,9 +37,9 @@ fn test_resolve_paste_paths_detects_existing_target() {
     let (from, to) = file_operation::resolve_paste_paths(&mut context).unwrap();
 
     // Target exists
-    assert!(to.exists());
-    assert_eq!(from.file_name().unwrap().to_str().unwrap(), "file.txt");
-    assert_eq!(to.file_name().unwrap().to_str().unwrap(), "file.txt");
+    assert!(Path::new(&to).exists());
+    assert_eq!(Path::new(&from).file_name().unwrap().to_str().unwrap(), "file.txt");
+    assert_eq!(Path::new(&to).file_name().unwrap().to_str().unwrap(), "file.txt");
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn test_overwrite_after_delete_target() {
 
     let from = source.join("file.txt");
     let to = dest.join("file.txt");
-    let rx = background_op::spawn_copy(from, to, "test".to_string());
+    let rx = background_op::spawn_copy(from.clone(), to.clone(), "test".to_string());
     let result = rx.recv().unwrap();
     assert!(result.result.is_ok());
 
@@ -72,8 +72,8 @@ fn test_overwrite_after_delete_target() {
 #[test]
 fn test_pending_paste_stores_paths() {
     let mut context = Context::new().unwrap();
-    let from = PathBuf::from("/test/source.txt");
-    let to = PathBuf::from("/test/dest.txt");
+    let from = "/test/source.txt".to_string();
+    let to = "/test/dest.txt".to_string();
 
     context.pending_paste = Some((from.clone(), to.clone(), false));
 
@@ -86,8 +86,8 @@ fn test_pending_paste_stores_paths() {
 #[test]
 fn test_pending_paste_with_cut() {
     let mut context = Context::new().unwrap();
-    let from = PathBuf::from("/test/source.txt");
-    let to = PathBuf::from("/test/dest.txt");
+    let from = "/test/source.txt".to_string();
+    let to = "/test/dest.txt".to_string();
 
     context.pending_paste = Some((from.clone(), to.clone(), true));
 

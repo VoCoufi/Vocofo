@@ -77,7 +77,22 @@ fn render_status_bar(frame: &mut Frame, area: &Rect, context: &Context) {
     let (text, style) = if context.is_operation_running() {
         let spinner = SPINNER_FRAMES[context.spinner_tick as usize % SPINNER_FRAMES.len()];
         let desc = context.operation_description.as_deref().unwrap_or("Working...");
-        (format!("{} {}", spinner, desc), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        let progress_str = if let Some(ref progress) = context.transfer_progress {
+            let transferred = progress.bytes_transferred.load(std::sync::atomic::Ordering::Relaxed);
+            let total = progress.total_bytes.load(std::sync::atomic::Ordering::Relaxed);
+            if total > 0 {
+                let pct = (transferred * 100).checked_div(total).unwrap_or(0);
+                format!(" [{} / {} ({}%)]",
+                    crate::file_operation::format_size(transferred),
+                    crate::file_operation::format_size(total),
+                    pct)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+        (format!("{} {}{}", spinner, desc, progress_str), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
     } else if let Some(message) = context.get_status_message() {
         (message.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
     } else {
@@ -135,6 +150,10 @@ fn create_keyboard_shortcuts() -> String {
         ("Bksp", "Parent Dir"),
         (".", "Hidden"),
         ("F3", "Preview"),
+        ("^M", "chmod"),
+        ("F5", "Connect"),
+        ("F6", "Disconnect"),
+        ("F7", "Bookmarks"),
     ];
 
     shortcuts.iter()
@@ -209,7 +228,11 @@ fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
         UiState::CreatePopup => render::popup_name_creation(frame, context)?,
         UiState::CreateFilePopup => render::popup_create_file(frame, context)?,
         UiState::RenamePopup => render::popup_rename(frame, context)?,
+        UiState::ChmodPopup => render::popup_chmod(frame, context)?,
         UiState::ConfirmOverwrite => render::popup_confirm_overwrite(frame, context)?,
+        UiState::ConnectDialog => render::popup_connect_dialog(frame, context)?,
+        UiState::BookmarkList => render::popup_bookmark_list(frame, context)?,
+        UiState::BookmarkNameInput => render::popup_bookmark_name(frame, context)?,
         UiState::SearchMode | UiState::Normal => ()
     }
 

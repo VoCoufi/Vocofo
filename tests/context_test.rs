@@ -235,8 +235,8 @@ fn test_get_metadata_selected_item_file() {
     assert!(metadata.is_some());
 
     let meta = metadata.unwrap();
-    assert!(meta.is_file());
-    assert!(!meta.is_dir());
+    assert!(meta.is_file);
+    assert!(!meta.is_dir);
 }
 
 #[test]
@@ -251,8 +251,8 @@ fn test_get_metadata_selected_item_folder() {
     assert!(metadata.is_some());
 
     let meta = metadata.unwrap();
-    assert!(meta.is_dir());
-    assert!(!meta.is_file());
+    assert!(meta.is_dir);
+    assert!(!meta.is_file);
 }
 
 #[test]
