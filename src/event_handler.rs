@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::background_op;
-use crate::context::{Context, UiState};
+use crate::context::{ConnectDialogState, ConnectionProtocol, Context, UiState};
 use crate::file_operation;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -117,6 +117,22 @@ pub fn handle_main_event(context: &mut Context, key_event: KeyEvent) -> EventRes
         }
         (KeyCode::F(3), _) => {
             context.show_preview = !context.show_preview;
+        }
+        (KeyCode::F(5), _) => {
+            context.connect_dialog = Some(ConnectDialogState::new());
+            context.set_ui_state(UiState::ConnectDialog);
+        }
+        (KeyCode::F(6), _) => {
+            // Disconnect: reset active panel to local backend
+            if !context.active().backend.is_local() {
+                let local_backend: Arc<dyn crate::backend::FilesystemBackend> =
+                    Arc::new(crate::local_backend::LocalBackend::new());
+                let home = local_backend.canonicalize(".").unwrap_or_else(|_| ".".to_string());
+                context.active_mut().backend = local_backend;
+                context.active_mut().path = home;
+                context.active_mut().invalidate_directory_cache();
+                context.set_status_message("Disconnected");
+            }
         }
         // Page navigation
         (KeyCode::PageDown, _) => {
@@ -322,6 +338,142 @@ pub fn handle_rename_popup_event(context: &mut Context, key_event: KeyEvent) -> 
         _ => {}
     }
     Ok(())
+}
+
+/// Handles key events for the connection dialog
+pub fn handle_connect_dialog_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+    let dialog = match context.connect_dialog.as_mut() {
+        Some(d) => d,
+        None => {
+            context.set_ui_state(UiState::Normal);
+            return Ok(());
+        }
+    };
+
+    match key_event.code {
+        KeyCode::Esc => {
+            context.connect_dialog = None;
+            context.set_ui_state(UiState::Normal);
+        }
+        KeyCode::Tab => {
+            dialog.focused_field = (dialog.focused_field + 1) % dialog.field_count();
+        }
+        KeyCode::BackTab => {
+            if dialog.focused_field == 0 {
+                dialog.focused_field = dialog.field_count() - 1;
+            } else {
+                dialog.focused_field -= 1;
+            }
+        }
+        KeyCode::Up if dialog.focused_field == 0 => {
+            // Toggle protocol
+            dialog.protocol = match dialog.protocol {
+                ConnectionProtocol::Sftp => ConnectionProtocol::Ftp,
+                ConnectionProtocol::Ftp => ConnectionProtocol::Sftp,
+            };
+            // Update default port
+            dialog.port = match dialog.protocol {
+                ConnectionProtocol::Sftp => "22".to_string(),
+                ConnectionProtocol::Ftp => "21".to_string(),
+            };
+        }
+        KeyCode::Down if dialog.focused_field == 0 => {
+            dialog.protocol = match dialog.protocol {
+                ConnectionProtocol::Sftp => ConnectionProtocol::Ftp,
+                ConnectionProtocol::Ftp => ConnectionProtocol::Sftp,
+            };
+            dialog.port = match dialog.protocol {
+                ConnectionProtocol::Sftp => "22".to_string(),
+                ConnectionProtocol::Ftp => "21".to_string(),
+            };
+        }
+        KeyCode::Backspace if dialog.focused_field > 0 => {
+            dialog.active_field_mut().pop();
+        }
+        KeyCode::Char(c) if dialog.focused_field > 0 => {
+            dialog.active_field_mut().push(c);
+        }
+        KeyCode::Enter => {
+            attempt_connection(context);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn attempt_connection(context: &mut Context) {
+    let dialog = match context.connect_dialog.as_ref() {
+        Some(d) => d.clone(),
+        None => return,
+    };
+
+    if dialog.host.is_empty() {
+        if let Some(d) = context.connect_dialog.as_mut() {
+            d.error_message = Some("Host is required".to_string());
+        }
+        return;
+    }
+
+    let port: u16 = dialog.port.parse().unwrap_or(match dialog.protocol {
+        ConnectionProtocol::Sftp => 22,
+        ConnectionProtocol::Ftp => 21,
+    });
+
+    let result: Result<Arc<dyn crate::backend::FilesystemBackend>, String> = match dialog.protocol {
+        ConnectionProtocol::Sftp => {
+            #[cfg(feature = "sftp")]
+            {
+                crate::sftp_backend::SftpBackend::connect(
+                    &dialog.host,
+                    port,
+                    &dialog.username,
+                    &dialog.password,
+                    if dialog.key_path.is_empty() { None } else { Some(&dialog.key_path) },
+                )
+                .map(|b| Arc::new(b) as Arc<dyn crate::backend::FilesystemBackend>)
+                .map_err(|e| e.to_string())
+            }
+            #[cfg(not(feature = "sftp"))]
+            {
+                Err("SFTP support not compiled (enable 'sftp' feature)".to_string())
+            }
+        }
+        ConnectionProtocol::Ftp => {
+            #[cfg(feature = "ftp")]
+            {
+                crate::ftp_backend::FtpBackend::connect(
+                    &dialog.host,
+                    port,
+                    &dialog.username,
+                    &dialog.password,
+                )
+                .map(|b| Arc::new(b) as Arc<dyn crate::backend::FilesystemBackend>)
+                .map_err(|e| e.to_string())
+            }
+            #[cfg(not(feature = "ftp"))]
+            {
+                Err("FTP support not compiled (enable 'ftp' feature)".to_string())
+            }
+        }
+    };
+
+    match result {
+        Ok(backend) => {
+            let initial_path = backend.canonicalize(".")
+                .unwrap_or_else(|_| "/".to_string());
+            context.active_mut().backend = backend;
+            context.active_mut().path = initial_path;
+            context.active_mut().invalidate_directory_cache();
+            context.connect_dialog = None;
+            context.set_ui_state(UiState::Normal);
+            context.set_status_message("Connected");
+        }
+        Err(e) => {
+            if let Some(d) = context.connect_dialog.as_mut() {
+                d.error_message = Some(e);
+            }
+        }
+    }
 }
 
 /// Handles user input events for the delete confirmation popup

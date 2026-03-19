@@ -10,6 +10,8 @@ use ratatui::prelude::*;
 
 mod backend;
 mod file_operation;
+#[cfg(feature = "ftp")]
+mod ftp_backend;
 mod ui;
 mod context;
 mod render;
@@ -18,6 +20,8 @@ mod messages_enum;
 mod background_op;
 mod config;
 mod local_backend;
+#[cfg(feature = "sftp")]
+mod sftp_backend;
 
 use crate::context::Context;
 
@@ -210,6 +214,7 @@ fn handle_events(context: &mut Context, timeout: Duration) -> AppResult<bool> {
                     context::UiState::RenamePopup => event_handler::handle_rename_popup_event(context, key),
                     context::UiState::SearchMode => event_handler::handle_search_event(context, key),
                     context::UiState::ConfirmOverwrite => event_handler::handle_overwrite_popup_event(context, key),
+                    context::UiState::ConnectDialog => event_handler::handle_connect_dialog_event(context, key),
                 }?;
             }
         }

@@ -135,6 +135,8 @@ fn create_keyboard_shortcuts() -> String {
         ("Bksp", "Parent Dir"),
         (".", "Hidden"),
         ("F3", "Preview"),
+        ("F5", "Connect"),
+        ("F6", "Disconnect"),
     ];
 
     shortcuts.iter()
@@ -210,6 +212,7 @@ fn render_popups(frame: &mut Frame, context: &mut Context) -> UiResult<()> {
         UiState::CreateFilePopup => render::popup_create_file(frame, context)?,
         UiState::RenamePopup => render::popup_rename(frame, context)?,
         UiState::ConfirmOverwrite => render::popup_confirm_overwrite(frame, context)?,
+        UiState::ConnectDialog => render::popup_connect_dialog(frame, context)?,
         UiState::SearchMode | UiState::Normal => ()
     }
 

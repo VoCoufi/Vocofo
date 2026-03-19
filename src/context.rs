@@ -245,6 +245,57 @@ pub enum UiState {
     RenamePopup,
     SearchMode,
     ConfirmOverwrite,
+    ConnectDialog,
+}
+
+/// Connection protocol for remote backends
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ConnectionProtocol {
+    Sftp,
+    Ftp,
+}
+
+/// State for the connection dialog
+#[derive(Debug, Clone)]
+pub struct ConnectDialogState {
+    pub protocol: ConnectionProtocol,
+    pub host: String,
+    pub port: String,
+    pub username: String,
+    pub password: String,
+    pub key_path: String,
+    pub focused_field: usize,
+    pub error_message: Option<String>,
+}
+
+impl ConnectDialogState {
+    pub fn new() -> Self {
+        Self {
+            protocol: ConnectionProtocol::Sftp,
+            host: String::new(),
+            port: "22".to_string(),
+            username: String::new(),
+            password: String::new(),
+            key_path: String::new(),
+            focused_field: 1, // start on host field
+            error_message: None,
+        }
+    }
+
+    pub fn field_count(&self) -> usize {
+        6 // protocol, host, port, username, password, key_path
+    }
+
+    pub fn active_field_mut(&mut self) -> &mut String {
+        match self.focused_field {
+            1 => &mut self.host,
+            2 => &mut self.port,
+            3 => &mut self.username,
+            4 => &mut self.password,
+            5 => &mut self.key_path,
+            _ => &mut self.host,
+        }
+    }
 }
 
 /// Central application state
@@ -266,6 +317,7 @@ pub struct Context {
     pub operation_description: Option<String>,
     pub spinner_tick: u8,
     pub pending_g: bool,
+    pub connect_dialog: Option<ConnectDialogState>,
 }
 
 impl Context {
@@ -300,6 +352,7 @@ impl Context {
             operation_description: None,
             spinner_tick: 0,
             pending_g: false,
+            connect_dialog: None,
         })
     }
 
