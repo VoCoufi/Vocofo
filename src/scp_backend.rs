@@ -7,6 +7,10 @@ use std::sync::Mutex;
 use ssh2::Session;
 
 use crate::backend::{ConnectionParams, DirEntry, FileInfo, FilesystemBackend};
+
+fn scp_err(op: &str, e: impl std::fmt::Display) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, format!("SCP {}: {}", op, e))
+}
 #[cfg(feature = "ftp")]
 use crate::ftp_backend::parse_list_line;
 
@@ -34,16 +38,16 @@ impl ScpBackend {
     /// Execute a command via SSH and return stdout
     fn ssh_exec(&self, cmd: &str) -> io::Result<String> {
         let session = self.session.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         let mut channel = session.channel_session()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         channel.exec(cmd)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         let mut output = String::new();
         channel.read_to_string(&mut output)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         channel.wait_close()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         Ok(output)
     }
 }
@@ -177,12 +181,12 @@ impl FilesystemBackend for ScpBackend {
 
     fn read_file(&self, path: &str, max_bytes: usize) -> io::Result<Vec<u8>> {
         let session = self.session.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         let (mut channel, _stat) = session.scp_recv(Path::new(path))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         let mut data = Vec::new();
         channel.read_to_end(&mut data)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         if data.len() > max_bytes {
             data.truncate(max_bytes);
         }
@@ -191,19 +195,19 @@ impl FilesystemBackend for ScpBackend {
 
     fn write_file(&self, path: &str, data: &[u8]) -> io::Result<()> {
         let session = self.session.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         let mut channel = session.scp_send(Path::new(path), 0o644, data.len() as u64, None)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         channel.write_all(data)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         channel.send_eof()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         channel.wait_eof()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         channel.close()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         channel.wait_close()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| scp_err("operation", e))?;
         Ok(())
     }
 

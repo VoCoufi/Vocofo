@@ -112,7 +112,7 @@ impl Config {
             fs::create_dir_all(parent)?;
         }
         let content = toml::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to serialize config: {}", e)))?;
         let tmp_path = path.with_extension("toml.tmp");
         fs::write(&tmp_path, content)?;
         fs::rename(&tmp_path, &path)

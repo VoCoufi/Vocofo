@@ -8,6 +8,10 @@ use suppaftp::FtpStream;
 
 use crate::backend::{ConnectionParams, ConnectionProtocol, DirEntry, FileInfo, FilesystemBackend};
 
+fn ftp_err(op: &str, e: impl std::fmt::Display) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, format!("FTP {}: {}", op, e))
+}
+
 /// Parse FTP LIST date fields ("Jan", "01", "12:00" or "2024") into SystemTime
 fn parse_ftp_date(month: &str, day: &str, time_or_year: &str) -> Option<SystemTime> {
     let month_num = match month {
@@ -174,9 +178,9 @@ impl FilesystemBackend for FtpBackend {
 
     fn list_dir(&self, path: &str) -> io::Result<Vec<DirEntry>> {
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         let lines = ftp.list(Some(path))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
 
         let entries: Vec<DirEntry> = lines.iter()
             .filter_map(|line| parse_list_line(line))
@@ -197,7 +201,7 @@ impl FilesystemBackend for FtpBackend {
 
         // Fallback: might be a directory not found in listing (e.g., root)
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         let is_dir = if let Ok(pwd) = ftp.pwd() {
             if ftp.cwd(path).is_ok() {
                 let _ = ftp.cwd(&pwd);
@@ -223,13 +227,13 @@ impl FilesystemBackend for FtpBackend {
 
     fn exists(&self, path: &str) -> io::Result<bool> {
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
 
         if ftp.size(path).is_ok() {
             return Ok(true);
         }
         let pwd = ftp.pwd()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         if ftp.cwd(path).is_ok() {
             let _ = ftp.cwd(&pwd);
             return Ok(true);
@@ -239,14 +243,14 @@ impl FilesystemBackend for FtpBackend {
 
     fn canonicalize(&self, path: &str) -> io::Result<String> {
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
 
         let original = ftp.pwd()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         ftp.cwd(path)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         let real = ftp.pwd()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         ftp.cwd(&original)
             .map_err(|e| io::Error::new(io::ErrorKind::Other,
                 format!("Failed to restore FTP directory: {}", e)))?;
@@ -255,9 +259,9 @@ impl FilesystemBackend for FtpBackend {
 
     fn read_file(&self, path: &str, max_bytes: usize) -> io::Result<Vec<u8>> {
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         let cursor = ftp.retr_as_buffer(path)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         let data = cursor.into_inner();
         if data.len() > max_bytes {
             Ok(data[..max_bytes].to_vec())
@@ -268,18 +272,18 @@ impl FilesystemBackend for FtpBackend {
 
     fn write_file(&self, path: &str, data: &[u8]) -> io::Result<()> {
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         let mut cursor = Cursor::new(data);
         ftp.put_file(path, &mut cursor)
             .map(|_| ())
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| ftp_err("operation", e))
     }
 
     fn create_dir(&self, path: &str) -> io::Result<()> {
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         ftp.mkdir(path)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         Ok(())
     }
 
@@ -289,9 +293,9 @@ impl FilesystemBackend for FtpBackend {
 
     fn remove_file(&self, path: &str) -> io::Result<()> {
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         ftp.rm(path)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| ftp_err("operation", e))
     }
 
     fn remove_dir_all(&self, path: &str) -> io::Result<()> {
@@ -305,16 +309,16 @@ impl FilesystemBackend for FtpBackend {
             }
         }
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         ftp.rmdir(path)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| ftp_err("operation", e))
     }
 
     fn rename(&self, from: &str, to: &str) -> io::Result<()> {
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         ftp.rename(from, to)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| ftp_err("operation", e))
     }
 
     fn copy_file(&self, from: &str, to: &str) -> io::Result<()> {
@@ -370,10 +374,10 @@ impl FilesystemBackend for FtpBackend {
 
     fn chmod(&self, path: &str, mode: u32) -> io::Result<()> {
         let mut ftp = self.ftp.lock()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| ftp_err("operation", e))?;
         ftp.site(&format!("CHMOD {:o} {}", mode, path))
             .map(|_| ())
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| ftp_err("operation", e))
     }
 
     fn is_connected(&self) -> bool {
