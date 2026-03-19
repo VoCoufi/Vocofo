@@ -61,7 +61,7 @@ pub fn handle_paste(context: &mut Context) {
         let count = items.len();
         let action = if is_cut { "Moving" } else { "Copying" };
         let desc = format!("{} {} items...", action, count);
-        let progress = Arc::new(crate::background_op::TransferProgress::new());
+        let progress = Arc::new(crate::background_op::TransferProgress::default());
         context.transfer_progress = Some(Arc::clone(&progress));
         let rx = background_op::spawn_copy_batch_with_backend(
             src_backend,
@@ -135,7 +135,7 @@ fn spawn_paste_operation(context: &mut Context, from: String, to: String, is_cut
         .file_name(&from)
         .unwrap_or_else(|| "item".to_string());
 
-    let progress = Arc::new(crate::background_op::TransferProgress::new());
+    let progress = Arc::new(crate::background_op::TransferProgress::default());
     context.transfer_progress = Some(Arc::clone(&progress));
     let (desc, rx) = if is_cut {
         let desc = format!("Moving {}...", name);

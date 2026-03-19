@@ -9,7 +9,7 @@ use suppaftp::FtpStream;
 use crate::backend::{ConnectionParams, ConnectionProtocol, DirEntry, FileInfo, FilesystemBackend};
 
 fn ftp_err(op: &str, e: impl std::fmt::Display) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, format!("FTP {}: {}", op, e))
+    io::Error::other(format!("FTP {}: {}", op, e))
 }
 
 /// Parse FTP LIST date fields ("Jan", "01", "12:00" or "2024") into SystemTime
@@ -251,12 +251,8 @@ impl FilesystemBackend for FtpBackend {
         let original = ftp.pwd().map_err(|e| ftp_err("operation", e))?;
         ftp.cwd(path).map_err(|e| ftp_err("operation", e))?;
         let real = ftp.pwd().map_err(|e| ftp_err("operation", e))?;
-        ftp.cwd(&original).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to restore FTP directory: {}", e),
-            )
-        })?;
+        ftp.cwd(&original)
+            .map_err(|e| io::Error::other(format!("Failed to restore FTP directory: {}", e)))?;
         Ok(real)
     }
 
@@ -368,7 +364,7 @@ impl FilesystemBackend for FtpBackend {
 
     fn chmod(&self, path: &str, mode: u32) -> io::Result<()> {
         let mut ftp = self.ftp.lock().map_err(|e| ftp_err("operation", e))?;
-        ftp.site(&format!("CHMOD {:o} {}", mode, path))
+        ftp.site(format!("CHMOD {:o} {}", mode, path))
             .map(|_| ())
             .map_err(|e| ftp_err("operation", e))
     }

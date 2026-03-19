@@ -9,7 +9,7 @@ use ssh2::Session;
 use crate::backend::{ConnectionParams, DirEntry, FileInfo, FilesystemBackend};
 
 fn scp_err(op: &str, e: impl std::fmt::Display) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, format!("SCP {}: {}", op, e))
+    io::Error::other(format!("SCP {}: {}", op, e))
 }
 #[cfg(feature = "ftp")]
 use crate::ftp_backend::parse_list_line;

@@ -606,7 +606,7 @@ fn test_ctrl_s_empty_host_shows_error() {
 #[test]
 fn test_transfer_progress_new() {
     use std::sync::atomic::Ordering;
-    let progress = vocofo::background_op::TransferProgress::new();
+    let progress = vocofo::background_op::TransferProgress::default();
     assert_eq!(progress.bytes_transferred.load(Ordering::Relaxed), 0);
     assert_eq!(progress.total_bytes.load(Ordering::Relaxed), 0);
 }
@@ -614,7 +614,7 @@ fn test_transfer_progress_new() {
 #[test]
 fn test_transfer_progress_atomic_updates() {
     use std::sync::atomic::Ordering;
-    let progress = vocofo::background_op::TransferProgress::new();
+    let progress = vocofo::background_op::TransferProgress::default();
     progress.total_bytes.store(1000, Ordering::Relaxed);
     progress.bytes_transferred.fetch_add(500, Ordering::Relaxed);
     assert_eq!(progress.bytes_transferred.load(Ordering::Relaxed), 500);

@@ -11,7 +11,7 @@ use ssh2::{Session, Sftp};
 use crate::backend::{ConnectionParams, ConnectionProtocol, DirEntry, FileInfo, FilesystemBackend};
 
 fn sftp_err(op: &str, e: impl std::fmt::Display) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, format!("SFTP {}: {}", op, e))
+    io::Error::other(format!("SFTP {}: {}", op, e))
 }
 
 pub struct SftpBackend {

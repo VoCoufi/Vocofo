@@ -3,18 +3,13 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Panel layout orientation
-#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum PanelLayout {
+    #[default]
     Auto,
     Horizontal,
     Vertical,
-}
-
-impl Default for PanelLayout {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl PanelLayout {
@@ -43,7 +38,7 @@ impl PanelLayout {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Default)]
 #[serde(default)]
 pub struct Config {
     pub general: GeneralConfig,
@@ -70,15 +65,6 @@ pub struct GeneralConfig {
     pub show_preview_on_start: bool,
     #[serde(default)]
     pub panel_layout: PanelLayout,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            general: GeneralConfig::default(),
-            connections: Vec::new(),
-        }
-    }
 }
 
 impl Default for GeneralConfig {
@@ -109,12 +95,8 @@ impl Config {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let content = toml::to_string_pretty(self).map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to serialize config: {}", e),
-            )
-        })?;
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| std::io::Error::other(format!("Failed to serialize config: {}", e)))?;
         let tmp_path = path.with_extension("toml.tmp");
         fs::write(&tmp_path, content)?;
         fs::rename(&tmp_path, &path)

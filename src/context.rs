@@ -133,10 +133,7 @@ impl PanelState {
     }
 
     pub fn open_item(&mut self) -> Option<String> {
-        let info = match self.get_metadata_selected_item() {
-            Some(info) => info,
-            None => return None,
-        };
+        let info = self.get_metadata_selected_item()?;
 
         if info.is_dir {
             let err = self.set_full_path();
@@ -316,8 +313,8 @@ pub struct ConnectDialogState {
     pub error_message: Option<String>,
 }
 
-impl ConnectDialogState {
-    pub fn new() -> Self {
+impl Default for ConnectDialogState {
+    fn default() -> Self {
         Self {
             protocol: ConnectionProtocol::Sftp,
             host: String::new(),
@@ -328,6 +325,12 @@ impl ConnectDialogState {
             focused_field: 1, // start on host field
             error_message: None,
         }
+    }
+}
+
+impl ConnectDialogState {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn field_count(&self) -> usize {

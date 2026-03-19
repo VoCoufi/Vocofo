@@ -12,8 +12,8 @@ pub struct TransferProgress {
     pub total_bytes: AtomicU64,
 }
 
-impl TransferProgress {
-    pub fn new() -> Self {
+impl Default for TransferProgress {
+    fn default() -> Self {
         Self {
             bytes_transferred: AtomicU64::new(0),
             total_bytes: AtomicU64::new(0),
