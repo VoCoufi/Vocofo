@@ -22,27 +22,26 @@ A fast, lightweight terminal-based file manager written in Rust with dual-panel 
 ## Quick Start
 
 ```bash
-# Clone and run
-git clone https://gitlab.com/Coufik/Vocofo.git
-cd Vocofo
-cargo run
-
-# Or install locally
-cargo install --path .
+cargo install vocofo
 vocofo
 ```
 
 ## Installation
 
-### Build from Source
+### From crates.io
 
-**Prerequisites:** Rust 1.70+ ([rustup.rs](https://rustup.rs/))
+```bash
+cargo install vocofo
+```
+
+### From Source
+
+**Prerequisites:** Rust 1.85+ ([rustup.rs](https://rustup.rs/))
 
 ```bash
 git clone https://gitlab.com/Coufik/Vocofo.git
 cd Vocofo
-cargo build --release
-# Binary at target/release/vocofo
+cargo install --path .
 ```
 
 ### Feature Flags
