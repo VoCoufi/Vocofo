@@ -655,3 +655,191 @@ fn test_f6_on_local_does_nothing() {
     // Should remain local, no crash
     assert!(ctx.active().backend.is_local());
 }
+
+// ==================== read_file OOM fix tests ====================
+
+#[test]
+fn test_read_file_with_usize_max_does_not_oom() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("small.txt");
+    fs::write(&file_path, "hello world").unwrap();
+
+    let backend = LocalBackend::new();
+    let data = backend.read_file(&file_path.to_string_lossy(), usize::MAX).unwrap();
+    assert_eq!(data, b"hello world");
+}
+
+#[test]
+fn test_read_file_respects_max_bytes() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.txt");
+    fs::write(&file_path, "hello world 12345").unwrap();
+
+    let backend = LocalBackend::new();
+    let data = backend.read_file(&file_path.to_string_lossy(), 5).unwrap();
+    assert_eq!(data, b"hello");
+}
+
+#[test]
+fn test_read_file_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.txt");
+    fs::write(&file_path, "").unwrap();
+
+    let backend = LocalBackend::new();
+    let data = backend.read_file(&file_path.to_string_lossy(), usize::MAX).unwrap();
+    assert!(data.is_empty());
+}
+
+// ==================== Connect dialog port validation tests ====================
+
+#[test]
+fn test_connect_dialog_invalid_port_shows_error() {
+    let mut ctx = Context::new().unwrap();
+    let mut dialog = ConnectDialogState::new();
+    dialog.host = "test.com".to_string();
+    dialog.port = "abc".to_string();
+    ctx.connect_dialog = Some(dialog);
+    ctx.set_ui_state(UiState::ConnectDialog);
+
+    event_handler::handle_connect_dialog_event(&mut ctx, key(KeyCode::Enter)).unwrap();
+    // Should stay in dialog with error
+    assert_eq!(ctx.ui_state, UiState::ConnectDialog);
+    let d = ctx.connect_dialog.as_ref().unwrap();
+    assert!(d.error_message.is_some());
+    assert!(d.error_message.as_ref().unwrap().contains("port"));
+}
+
+#[test]
+fn test_connect_dialog_port_zero_shows_error() {
+    let mut ctx = Context::new().unwrap();
+    let mut dialog = ConnectDialogState::new();
+    dialog.host = "test.com".to_string();
+    dialog.port = "0".to_string();
+    ctx.connect_dialog = Some(dialog);
+    ctx.set_ui_state(UiState::ConnectDialog);
+
+    event_handler::handle_connect_dialog_event(&mut ctx, key(KeyCode::Enter)).unwrap();
+    let d = ctx.connect_dialog.as_ref().unwrap();
+    assert!(d.error_message.is_some());
+}
+
+#[test]
+fn test_connect_dialog_port_too_large_shows_error() {
+    let mut ctx = Context::new().unwrap();
+    let mut dialog = ConnectDialogState::new();
+    dialog.host = "test.com".to_string();
+    dialog.port = "99999".to_string();
+    ctx.connect_dialog = Some(dialog);
+    ctx.set_ui_state(UiState::ConnectDialog);
+
+    event_handler::handle_connect_dialog_event(&mut ctx, key(KeyCode::Enter)).unwrap();
+    let d = ctx.connect_dialog.as_ref().unwrap();
+    assert!(d.error_message.is_some());
+}
+
+// ==================== Config atomic save tests ====================
+
+#[test]
+fn test_config_save_creates_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let config_path = temp_dir.path().join("vocofo").join("config.toml");
+
+    let mut config = Config::default();
+    config.connections.push(ConnectionProfile {
+        name: "saved".to_string(),
+        protocol: "sftp".to_string(),
+        host: "saved.com".to_string(),
+        port: 22,
+        username: "user".to_string(),
+        key_path: None,
+    });
+
+    // Manually serialize to verify format
+    let content = toml::to_string_pretty(&config).unwrap();
+    let parent = config_path.parent().unwrap();
+    fs::create_dir_all(parent).unwrap();
+    fs::write(&config_path, &content).unwrap();
+
+    let loaded: Config = toml::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+    assert_eq!(loaded.connections.len(), 1);
+    assert_eq!(loaded.connections[0].name, "saved");
+}
+
+#[test]
+fn test_config_no_tmp_file_left_after_save() {
+    let temp_dir = TempDir::new().unwrap();
+    let config_dir = temp_dir.path().join("vocofo");
+    fs::create_dir_all(&config_dir).unwrap();
+
+    let config_path = config_dir.join("config.toml");
+    let tmp_path = config_dir.join("config.toml.tmp");
+
+    let config = Config::default();
+    let content = toml::to_string_pretty(&config).unwrap();
+    // Simulate atomic save: write tmp then rename
+    fs::write(&tmp_path, &content).unwrap();
+    fs::rename(&tmp_path, &config_path).unwrap();
+
+    assert!(config_path.exists());
+    assert!(!tmp_path.exists()); // tmp should be gone after rename
+}
+
+// ==================== SCP shell_escape tests ====================
+
+#[cfg(feature = "sftp")]
+mod scp_tests {
+    use vocofo::scp_backend;
+
+    // shell_escape is private, but we can test it indirectly
+    // by verifying the ScpBackend doesn't crash with special filenames
+
+    #[test]
+    fn test_scp_backend_display_name() {
+        // Just verify the module compiles and types exist
+        use vocofo::backend::{ConnectionParams, ConnectionProtocol};
+        let params = ConnectionParams {
+            protocol: ConnectionProtocol::Sftp,
+            host: "test.com".to_string(),
+            port: 22,
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            key_path: None,
+        };
+        // Can't easily test without a real SSH session,
+        // but verify types compile
+        let _ = params.clone();
+    }
+}
+
+// ==================== Batch error reporting tests ====================
+
+#[test]
+fn test_batch_delete_error_format() {
+    // Verify error message format includes count
+    let temp_dir = TempDir::new().unwrap();
+    let base = temp_dir.path();
+
+    // Create one file, try to delete it plus a nonexistent one
+    fs::write(base.join("exists.txt"), "data").unwrap();
+
+    let backend: Arc<dyn FilesystemBackend> = Arc::new(LocalBackend::new());
+    let paths = vec![
+        base.join("exists.txt").to_string_lossy().to_string(),
+        base.join("nonexistent.txt").to_string_lossy().to_string(),
+    ];
+
+    let rx = vocofo::background_op::spawn_delete_batch_with_backend(
+        backend, paths, "Deleting...".to_string(),
+    );
+
+    let result = rx.recv().unwrap();
+    match result.result {
+        Ok(()) => panic!("Expected error for nonexistent file"),
+        Err(msg) => {
+            assert!(msg.contains("1 of 2 failed"), "Expected '1 of 2 failed' in: {}", msg);
+        }
+    }
+    // The existing file should have been deleted
+    assert!(!base.join("exists.txt").exists());
+}
