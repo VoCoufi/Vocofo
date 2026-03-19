@@ -384,7 +384,6 @@ pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderR
 
     let inner = dialog_block.inner(area);
 
-    // Layout: protocol(1) + gap(1) + 5 fields(3 each=15) + gap(1) + hint(1) = 19 inner rows
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -395,8 +394,7 @@ pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderR
             Constraint::Length(3), // 4: Username
             Constraint::Length(3), // 5: Password
             Constraint::Length(3), // 6: Key path
-            Constraint::Length(1), // 7: Error / hint
-            Constraint::Min(0),   // 8: remaining
+            Constraint::Min(1),   // 7: Error / hint (flexible)
         ])
         .split(inner);
 
@@ -456,7 +454,8 @@ pub fn popup_connect_dialog(frame: &mut Frame, context: &mut Context) -> RenderR
     // Error message or hint
     if let Some(ref err) = dialog.error_message {
         let err_para = Paragraph::new(format!("  {}", err))
-            .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
+            .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+            .wrap(Wrap { trim: false });
         frame.render_widget(err_para, chunks[7]);
     } else {
         let hint = Paragraph::new("  [Tab] Next  [↑↓] Protocol  [Enter] Connect  [Esc] Cancel")
