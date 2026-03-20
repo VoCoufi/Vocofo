@@ -24,7 +24,7 @@ ratatui = "0.29.0"
 serde = { version = "1", features = ["derive"] }
 ssh2 = { version = "0.9", optional = true }
 suppaftp = { version = "6", default-features = false, optional = true }
+tempfile = "3.8"
 toml = "0.8"
 
 [dev-dependencies]
-tempfile = "3.8"

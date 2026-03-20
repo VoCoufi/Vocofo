@@ -1,5 +1,5 @@
 use std::io::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
 
@@ -80,32 +80,43 @@ pub fn format_item_details_from_info(info: &FileInfo) -> String {
     }
 }
 
-/// RAII guard that removes a temp file on drop (even on panic/early return)
-struct TempFileGuard(PathBuf);
-
-impl Drop for TempFileGuard {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
-    }
-}
+/// Max file size for remote file editing (100MB)
+const MAX_EDIT_FILE_SIZE: usize = 100 * 1024 * 1024;
 
 /// Opens a file using the appropriate backend
 pub fn open_file_with_backend(backend: &Arc<dyn FilesystemBackend>, path: &str) -> FileResult<()> {
     if backend.is_local() {
         edit::edit_file(Path::new(path)).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
     } else {
-        // Remote: download to temp, edit, upload back
-        let data = backend.read_file(path, usize::MAX)?;
-        let tmp_dir = std::env::temp_dir();
+        // Remote: download to secure temp file, edit, upload back
+        let data = backend.read_file(path, MAX_EDIT_FILE_SIZE)?;
+
+        // Preserve file extension for editor syntax highlighting
         let file_name = backend
             .file_name(path)
             .unwrap_or_else(|| "tempfile".to_string());
-        let tmp_path = tmp_dir.join(&file_name);
-        fs::write(&tmp_path, &data)?;
-        let _guard = TempFileGuard(tmp_path.clone());
+        let suffix = Path::new(&file_name)
+            .extension()
+            .map(|ext| format!(".{}", ext.to_string_lossy()))
+            .unwrap_or_default();
+
+        // Create secure temp file (random name, proper permissions)
+        let mut tmp_file = tempfile::Builder::new()
+            .prefix("vocofo-")
+            .suffix(&suffix)
+            .tempfile()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+        use std::io::Write;
+        tmp_file
+            .write_all(&data)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+        let tmp_path = tmp_file.path().to_path_buf();
         edit::edit_file(&tmp_path).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let modified = fs::read(&tmp_path)?;
         backend.write_file(path, &modified)?;
+        // tmp_file drops here → auto-deleted
         Ok(())
     }
 }

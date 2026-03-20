@@ -130,46 +130,7 @@ impl FilesystemBackend for LocalBackend {
     }
 
     fn copy_dir(&self, from: &str, to: &str) -> io::Result<()> {
-        let src = Path::new(from);
-        let dst = Path::new(to);
-
-        if !src.is_dir() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Source is not a directory",
-            ));
-        }
-
-        if !dst.exists() {
-            fs::create_dir_all(dst)?;
-        }
-
-        for entry in fs::read_dir(src)? {
-            let entry = entry?;
-            let file_type = entry.file_type()?;
-            let from_path = entry.path();
-            let to_path = dst.join(entry.file_name());
-
-            if file_type.is_dir() {
-                self.copy_dir(&from_path.to_string_lossy(), &to_path.to_string_lossy())?;
-            } else if file_type.is_file() {
-                self.copy_file(&from_path.to_string_lossy(), &to_path.to_string_lossy())?;
-            } else if file_type.is_symlink() {
-                let target = fs::read_link(&from_path)?;
-                let resolved = if target.is_absolute() {
-                    target
-                } else {
-                    from_path.parent().unwrap_or(Path::new("")).join(target)
-                };
-                if resolved.is_dir() {
-                    self.copy_dir(&resolved.to_string_lossy(), &to_path.to_string_lossy())?;
-                } else {
-                    self.copy_file(&resolved.to_string_lossy(), &to_path.to_string_lossy())?;
-                }
-            }
-        }
-
-        Ok(())
+        copy_dir_recursive(from, to, 0)
     }
 
     fn join_path(&self, base: &str, child: &str) -> String {
@@ -196,4 +157,68 @@ impl FilesystemBackend for LocalBackend {
         let perms = fs::Permissions::from_mode(mode);
         fs::set_permissions(path, perms)
     }
+}
+
+/// Max recursion depth for copy_dir to prevent symlink loops
+const MAX_COPY_DEPTH: u32 = 64;
+
+fn copy_dir_recursive(from: &str, to: &str, depth: u32) -> io::Result<()> {
+    if depth > MAX_COPY_DEPTH {
+        return Err(io::Error::other(
+            "Copy directory: maximum recursion depth exceeded (possible symlink loop)",
+        ));
+    }
+
+    let src = Path::new(from);
+    let dst = Path::new(to);
+
+    if !src.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Source is not a directory",
+        ));
+    }
+
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let from_path = entry.path();
+        let to_path = dst.join(entry.file_name());
+
+        if file_type.is_dir() {
+            copy_dir_recursive(
+                &from_path.to_string_lossy(),
+                &to_path.to_string_lossy(),
+                depth + 1,
+            )?;
+        } else if file_type.is_file() {
+            if let Some(parent) = to_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(&from_path, &to_path)?;
+        } else if file_type.is_symlink() {
+            let target = fs::read_link(&from_path)?;
+            let resolved = if target.is_absolute() {
+                target
+            } else {
+                from_path.parent().unwrap_or(Path::new("")).join(target)
+            };
+            if resolved.is_dir() {
+                copy_dir_recursive(
+                    &resolved.to_string_lossy(),
+                    &to_path.to_string_lossy(),
+                    depth + 1,
+                )?;
+            } else if let Some(parent) = to_path.parent() {
+                fs::create_dir_all(parent)?;
+                fs::copy(&resolved, &to_path)?;
+            }
+        }
+    }
+
+    Ok(())
 }

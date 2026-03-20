@@ -35,19 +35,33 @@ impl ScpBackend {
         }
     }
 
-    /// Execute a command via SSH and return stdout
+    /// Max output size for SSH exec commands (10MB)
+    const MAX_EXEC_OUTPUT: usize = 10 * 1024 * 1024;
+
+    /// Execute a command via SSH and return stdout (capped at 10MB)
     fn ssh_exec(&self, cmd: &str) -> io::Result<String> {
         let session = self.session.lock().map_err(|e| scp_err("operation", e))?;
         let mut channel = session
             .channel_session()
             .map_err(|e| scp_err("operation", e))?;
         channel.exec(cmd).map_err(|e| scp_err("operation", e))?;
-        let mut output = String::new();
-        channel
-            .read_to_string(&mut output)
-            .map_err(|e| scp_err("operation", e))?;
+        let mut buf = vec![0u8; Self::MAX_EXEC_OUTPUT];
+        let mut total = 0;
+        loop {
+            let n = channel
+                .read(&mut buf[total..])
+                .map_err(|e| scp_err("operation", e))?;
+            if n == 0 {
+                break;
+            }
+            total += n;
+            if total >= Self::MAX_EXEC_OUTPUT {
+                break;
+            }
+        }
+        buf.truncate(total);
         channel.wait_close().map_err(|e| scp_err("operation", e))?;
-        Ok(output)
+        String::from_utf8(buf).map_err(|e| scp_err("invalid UTF-8 in output", e))
     }
 }
 
