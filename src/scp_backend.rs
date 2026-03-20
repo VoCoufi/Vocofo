@@ -250,30 +250,7 @@ impl FilesystemBackend for ScpBackend {
         Ok(())
     }
 
-    fn join_path(&self, base: &str, child: &str) -> String {
-        if base.ends_with('/') {
-            format!("{}{}", base, child)
-        } else {
-            format!("{}/{}", base, child)
-        }
-    }
-
-    fn parent_path(&self, path: &str) -> Option<String> {
-        let path = path.trim_end_matches('/');
-        if path.is_empty() || path == "/" {
-            return None;
-        }
-        match path.rfind('/') {
-            Some(0) => Some("/".to_string()),
-            Some(pos) => Some(path[..pos].to_string()),
-            None => Some("/".to_string()),
-        }
-    }
-
-    fn file_name(&self, path: &str) -> Option<String> {
-        let path = path.trim_end_matches('/');
-        path.rsplit('/').next().map(|s| s.to_string())
-    }
+    // join_path, parent_path, file_name use trait defaults
 
     fn disconnect(&self) {
         if let Ok(session) = self.session.lock() {

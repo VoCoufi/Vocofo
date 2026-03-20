@@ -81,20 +81,55 @@ pub trait FilesystemBackend: Send + Sync {
     /// Rename/move within the same backend
     fn rename(&self, from: &str, to: &str) -> io::Result<()>;
 
-    /// Copy a single file within the same backend
-    fn copy_file(&self, from: &str, to: &str) -> io::Result<()>;
+    /// Copy a single file within the same backend (default: read + write)
+    fn copy_file(&self, from: &str, to: &str) -> io::Result<()> {
+        let data = self.read_file(from, usize::MAX)?;
+        self.write_file(to, &data)
+    }
 
-    /// Copy a directory recursively within the same backend
-    fn copy_dir(&self, from: &str, to: &str) -> io::Result<()>;
+    /// Copy a directory recursively within the same backend (default: recursive read + write)
+    fn copy_dir(&self, from: &str, to: &str) -> io::Result<()> {
+        self.create_dir(to)?;
+        let entries = self.list_dir(from)?;
+        for entry in entries {
+            let src = self.join_path(from, &entry.name);
+            let dst = self.join_path(to, &entry.name);
+            if entry.info.is_dir {
+                self.copy_dir(&src, &dst)?;
+            } else {
+                self.copy_file(&src, &dst)?;
+            }
+        }
+        Ok(())
+    }
 
     /// Join a base path and a child into a full path
-    fn join_path(&self, base: &str, child: &str) -> String;
+    fn join_path(&self, base: &str, child: &str) -> String {
+        if base.ends_with('/') {
+            format!("{}{}", base, child)
+        } else {
+            format!("{}/{}", base, child)
+        }
+    }
 
     /// Get the parent directory of a path
-    fn parent_path(&self, path: &str) -> Option<String>;
+    fn parent_path(&self, path: &str) -> Option<String> {
+        let path = path.trim_end_matches('/');
+        if path.is_empty() || path == "/" {
+            return None;
+        }
+        match path.rfind('/') {
+            Some(0) => Some("/".to_string()),
+            Some(pos) => Some(path[..pos].to_string()),
+            None => Some("/".to_string()),
+        }
+    }
 
     /// Get the file/directory name from a path
-    fn file_name(&self, path: &str) -> Option<String>;
+    fn file_name(&self, path: &str) -> Option<String> {
+        let path = path.trim_end_matches('/');
+        path.rsplit('/').next().map(|s| s.to_string())
+    }
 
     /// Explicitly close the connection (no-op for local backend)
     fn disconnect(&self) {}

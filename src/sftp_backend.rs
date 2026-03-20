@@ -228,50 +228,7 @@ impl FilesystemBackend for SftpBackend {
             .map_err(|e| sftp_err("rename", e))
     }
 
-    fn copy_file(&self, from: &str, to: &str) -> io::Result<()> {
-        let data = self.read_file(from, usize::MAX)?;
-        self.write_file(to, &data)
-    }
-
-    fn copy_dir(&self, from: &str, to: &str) -> io::Result<()> {
-        self.create_dir(to)?;
-        let entries = self.list_dir(from)?;
-        for entry in entries {
-            let src = self.join_path(from, &entry.name);
-            let dst = self.join_path(to, &entry.name);
-            if entry.info.is_dir {
-                self.copy_dir(&src, &dst)?;
-            } else {
-                self.copy_file(&src, &dst)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn join_path(&self, base: &str, child: &str) -> String {
-        if base.ends_with('/') {
-            format!("{}{}", base, child)
-        } else {
-            format!("{}/{}", base, child)
-        }
-    }
-
-    fn parent_path(&self, path: &str) -> Option<String> {
-        let path = path.trim_end_matches('/');
-        if path.is_empty() || path == "/" {
-            return None;
-        }
-        match path.rfind('/') {
-            Some(0) => Some("/".to_string()),
-            Some(pos) => Some(path[..pos].to_string()),
-            None => Some("/".to_string()),
-        }
-    }
-
-    fn file_name(&self, path: &str) -> Option<String> {
-        let path = path.trim_end_matches('/');
-        path.rsplit('/').next().map(|s| s.to_string())
-    }
+    // copy_file, copy_dir, join_path, parent_path, file_name use trait defaults
 
     fn disconnect(&self) {
         if let Ok(session) = self.session.lock() {

@@ -52,99 +52,78 @@ pub fn handle_search_event(context: &mut Context, key_event: KeyEvent) -> EventR
     Ok(())
 }
 
-/// Handles key events for the create folder popup
+// ============================================================================
+// Input popup handlers — shared pattern with per-popup Enter action
+// ============================================================================
+
+/// Generic input popup handler: Backspace, Esc, Char, with custom Enter action
+fn handle_input_popup(
+    context: &mut Context,
+    key_event: KeyEvent,
+    on_enter: fn(&mut Context) -> file_operation::FileResult<()>,
+    success_msg: &str,
+    error_prefix: &str,
+) -> EventResult {
+    match key_event.code {
+        KeyCode::Backspace => {
+            if !context.input.is_empty() {
+                context.input.pop();
+            }
+        }
+        KeyCode::Enter => match on_enter(context) {
+            Ok(_) => {
+                context.active_mut().invalidate_directory_cache();
+                context.set_status_message(success_msg);
+            }
+            Err(e) => {
+                context.set_ui_state(UiState::Normal);
+                context.set_input(String::default());
+                context.set_status_message(&format!("{}: {}", error_prefix, e));
+            }
+        },
+        KeyCode::Esc => {
+            context.set_ui_state(UiState::Normal);
+            context.set_input(String::default());
+        }
+        KeyCode::Char(c) => {
+            context.input.push(c);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 pub fn handle_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
-    match key_event.code {
-        KeyCode::Backspace => {
-            if !context.input.is_empty() {
-                context.input.pop();
-            }
-        }
-        KeyCode::Enter => match file_operation::handle_create_directory(context) {
-            Ok(_) => {
-                context.active_mut().invalidate_directory_cache();
-                context.set_status_message("Folder created");
-            }
-            Err(e) => {
-                context.set_ui_state(UiState::Normal);
-                context.set_input(String::default());
-                context.set_status_message(&format!("Create failed: {}", e));
-            }
-        },
-        KeyCode::Esc => {
-            context.set_ui_state(UiState::Normal);
-        }
-        KeyCode::Char(c) => {
-            context.input.push(c);
-        }
-        _ => {}
-    }
-    Ok(())
+    handle_input_popup(
+        context,
+        key_event,
+        file_operation::handle_create_directory,
+        "Folder created",
+        "Create failed",
+    )
 }
 
-/// Handles key events for the create file popup
 pub fn handle_file_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
-    match key_event.code {
-        KeyCode::Backspace => {
-            if !context.input.is_empty() {
-                context.input.pop();
-            }
-        }
-        KeyCode::Enter => match file_operation::handle_create_file(context) {
-            Ok(_) => {
-                context.active_mut().invalidate_directory_cache();
-                context.set_status_message("File created");
-            }
-            Err(e) => {
-                context.set_ui_state(UiState::Normal);
-                context.set_input(String::default());
-                context.set_status_message(&format!("Create failed: {}", e));
-            }
-        },
-        KeyCode::Esc => {
-            context.set_ui_state(UiState::Normal);
-            context.set_input(String::default());
-        }
-        KeyCode::Char(c) => {
-            context.input.push(c);
-        }
-        _ => {}
-    }
-    Ok(())
+    handle_input_popup(
+        context,
+        key_event,
+        file_operation::handle_create_file,
+        "File created",
+        "Create failed",
+    )
 }
 
-/// Handles key events for the rename popup
 pub fn handle_rename_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
-    match key_event.code {
-        KeyCode::Backspace => {
-            if !context.input.is_empty() {
-                context.input.pop();
-            }
-        }
-        KeyCode::Enter => match file_operation::handle_rename(context) {
-            Ok(_) => {
-                context.active_mut().invalidate_directory_cache();
-                context.set_status_message("Renamed successfully");
-            }
-            Err(e) => {
-                context.set_ui_state(UiState::Normal);
-                context.set_input(String::default());
-                context.set_status_message(&format!("Rename failed: {}", e));
-            }
-        },
-        KeyCode::Esc => {
-            context.set_ui_state(UiState::Normal);
-            context.set_input(String::default());
-        }
-        KeyCode::Char(c) => {
-            context.input.push(c);
-        }
-        _ => {}
-    }
-    Ok(())
+    handle_input_popup(
+        context,
+        key_event,
+        file_operation::handle_rename,
+        "Renamed successfully",
+        "Rename failed",
+    )
 }
 
-/// Handles key events for the chmod popup
+/// Chmod has custom input filtering (octal only) so it stays separate
 pub fn handle_chmod_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
     match key_event.code {
         KeyCode::Backspace => {
@@ -198,16 +177,26 @@ pub fn handle_chmod_popup_event(context: &mut Context, key_event: KeyEvent) -> E
     Ok(())
 }
 
-/// Handles user input events for the delete confirmation popup
-pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+// ============================================================================
+// Confirm dialog handlers — shared button navigation pattern
+// ============================================================================
+
+/// Generic confirm dialog handler with Yes/No button navigation
+fn handle_confirm_dialog(
+    context: &mut Context,
+    key_event: KeyEvent,
+    on_confirm: fn(&mut Context),
+    on_cancel: fn(&mut Context),
+) -> EventResult {
     match key_event.code {
         KeyCode::Char('y') => {
             context.set_ui_state(UiState::Normal);
             context.set_confirm_button_selected();
-            spawn_delete_operation(context);
+            on_confirm(context);
         }
         KeyCode::Char('n') | KeyCode::Esc => {
             context.set_ui_state(UiState::Normal);
+            on_cancel(context);
         }
         KeyCode::Left => {
             if !context.get_confirm_button_selected().unwrap_or(false) {
@@ -222,8 +211,10 @@ pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) ->
         KeyCode::Enter => {
             context.set_ui_state(UiState::Normal);
             if context.get_confirm_button_selected().unwrap_or(false) {
-                spawn_delete_operation(context);
+                on_confirm(context);
                 context.set_confirm_button_selected()
+            } else {
+                on_cancel(context);
             }
         }
         _ => {}
@@ -231,38 +222,13 @@ pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) ->
     Ok(())
 }
 
-/// Handles user input events for the overwrite confirmation popup
+pub fn handle_confirm_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
+    handle_confirm_dialog(context, key_event, spawn_delete_operation, |_| {})
+}
+
 pub fn handle_overwrite_popup_event(context: &mut Context, key_event: KeyEvent) -> EventResult {
-    match key_event.code {
-        KeyCode::Char('y') => {
-            context.set_ui_state(UiState::Normal);
-            execute_pending_paste(context);
-        }
-        KeyCode::Char('n') | KeyCode::Esc => {
-            context.set_ui_state(UiState::Normal);
-            context.pending_paste = None;
-            context.set_status_message("Paste cancelled");
-        }
-        KeyCode::Left => {
-            if !context.get_confirm_button_selected().unwrap_or(false) {
-                context.set_confirm_button_selected()
-            }
-        }
-        KeyCode::Right => {
-            if context.get_confirm_button_selected().unwrap_or(false) {
-                context.set_confirm_button_selected()
-            }
-        }
-        KeyCode::Enter => {
-            context.set_ui_state(UiState::Normal);
-            if context.get_confirm_button_selected().unwrap_or(false) {
-                execute_pending_paste(context);
-            } else {
-                context.pending_paste = None;
-                context.set_status_message("Paste cancelled");
-            }
-        }
-        _ => {}
-    }
-    Ok(())
+    handle_confirm_dialog(context, key_event, execute_pending_paste, |ctx| {
+        ctx.pending_paste = None;
+        ctx.set_status_message("Paste cancelled");
+    })
 }

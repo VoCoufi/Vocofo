@@ -9,20 +9,23 @@ use crate::context::Context;
 
 use super::{RenderResult, centered_rect_dialog, create_sized_button};
 
-pub fn popup_confirm_delete(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
-    let selected_item = context
-        .active()
-        .get_selected_item()
-        .ok_or_else(|| Box::<dyn std::error::Error>::from("No item selected"))?;
-
+/// Shared confirm dialog renderer with title, warning, message, and Yes/No buttons
+fn render_confirm_dialog(
+    frame: &mut Frame,
+    context: &Context,
+    title: &str,
+    warning_text: &str,
+    message_text: &str,
+    border_color: Color,
+) -> RenderResult<()> {
     let area = centered_rect_dialog(frame.area(), 80, 10);
 
     let dialog_block = Block::default()
-        .title(" Confirm Deletion ")
+        .title(title)
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::Red));
+        .border_style(Style::default().fg(border_color));
 
     frame.render_widget(Clear, area);
     frame.render_widget(dialog_block.clone(), area);
@@ -39,19 +42,14 @@ pub fn popup_confirm_delete(frame: &mut Frame, context: &mut Context) -> RenderR
         ])
         .split(inner_area);
 
-    let warning = Paragraph::new("⚠️ Warning: This action cannot be undone!")
+    let warning = Paragraph::new(warning_text)
         .alignment(Alignment::Center)
         .style(
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         );
-
-    let message = Paragraph::new(format!(
-        "Are you sure you want to delete \"{}\"?",
-        selected_item
-    ))
-    .alignment(Alignment::Center);
+    let message = Paragraph::new(message_text).alignment(Alignment::Center);
 
     let button_chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -71,6 +69,22 @@ pub fn popup_confirm_delete(frame: &mut Frame, context: &mut Context) -> RenderR
     frame.render_widget(create_sized_button("No", !selected), button_chunks[3]);
 
     Ok(())
+}
+
+pub fn popup_confirm_delete(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
+    let selected_item = context
+        .active()
+        .get_selected_item()
+        .ok_or_else(|| Box::<dyn std::error::Error>::from("No item selected"))?;
+
+    render_confirm_dialog(
+        frame,
+        context,
+        " Confirm Deletion ",
+        "⚠️ Warning: This action cannot be undone!",
+        &format!("Are you sure you want to delete \"{}\"?", selected_item),
+        Color::Red,
+    )
 }
 
 pub fn popup_name_creation(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
@@ -157,56 +171,14 @@ pub fn popup_confirm_overwrite(frame: &mut Frame, context: &mut Context) -> Rend
         })
         .unwrap_or_else(|| "file".to_string());
 
-    let area = centered_rect_dialog(frame.area(), 80, 10);
-    let dialog_block = Block::default()
-        .title(" Confirm Overwrite ")
-        .title_alignment(Alignment::Center)
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::Yellow));
-
-    frame.render_widget(Clear, area);
-    frame.render_widget(dialog_block.clone(), area);
-
-    let inner_area = dialog_block.inner(area);
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(2),
-            Constraint::Length(0),
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(3),
-        ])
-        .split(inner_area);
-
-    let warning = Paragraph::new("⚠️ File already exists!")
-        .alignment(Alignment::Center)
-        .style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        );
-    let message =
-        Paragraph::new(format!("Overwrite \"{}\"?", file_name)).alignment(Alignment::Center);
-
-    let button_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(10),
-            Constraint::Percentage(35),
-            Constraint::Percentage(10),
-            Constraint::Percentage(35),
-            Constraint::Percentage(10),
-        ])
-        .split(chunks[4]);
-
-    let selected = context.get_confirm_button_selected().unwrap_or(false);
-    frame.render_widget(warning, chunks[0]);
-    frame.render_widget(message, chunks[2]);
-    frame.render_widget(create_sized_button("Yes", selected), button_chunks[1]);
-    frame.render_widget(create_sized_button("No", !selected), button_chunks[3]);
-    Ok(())
+    render_confirm_dialog(
+        frame,
+        context,
+        " Confirm Overwrite ",
+        "⚠️ File already exists!",
+        &format!("Overwrite \"{}\"?", file_name),
+        Color::Yellow,
+    )
 }
 
 pub fn popup_bookmark_list(frame: &mut Frame, context: &mut Context) -> RenderResult<()> {
