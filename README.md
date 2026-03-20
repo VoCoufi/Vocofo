@@ -9,7 +9,7 @@ A fast, lightweight terminal-based file manager written in Rust with dual-panel 
 
 - **Dual-Panel Layout**: Side-by-side or stacked panels (auto/horizontal/vertical)
 - **Vim-Style Navigation**: `j/k/h/l`, `g/G`, search with `/`
-- **File Operations**: Copy, cut, paste, delete, rename, chmod — all with Ctrl+ safety
+- **File Operations**: Copy, cut, paste, delete, rename, chmod — all with Ctrl+ shortcuts to prevent accidents
 - **Remote Filesystems**: SFTP, FTP, and SCP fallback with connection bookmarks
 - **Command Palette**: `F1` opens searchable list of all available actions
 - **Settings UI**: `F2` for panel layout, hidden files, preview, default path
@@ -25,6 +25,8 @@ A fast, lightweight terminal-based file manager written in Rust with dual-panel 
 cargo install vocofo
 vocofo
 ```
+
+> **Note:** SFTP support requires `libssh2` and `openssl` system libraries. See [Installation](#from-source) for details. To install without remote support: `cargo install vocofo --no-default-features`
 
 ## Installation
 
@@ -120,7 +122,7 @@ Vocofo supports browsing remote filesystems via SFTP, FTP, and SCP:
 1. Press `F5` to open the connection dialog
 2. Select protocol (SFTP/FTP), enter host, port, username, password
 3. Press `Enter` to connect — the active panel switches to the remote filesystem
-4. All file operations work across local and remote panels (cross-backend copy/move)
+4. All file operations work — copy/move files between local and remote panels
 5. Press `F6` to disconnect
 
 ### Bookmarks
